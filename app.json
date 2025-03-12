@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "name": "Game Manager",
+    "slug": "GameManagerMobile",
+    "version": "1.2.2",
+    "orientation": "portrait",
+    "icon": "./assets/controle-de-video-game.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/controle-de-video-game.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0e1a"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/controle-de-video-game.png",
+        "backgroundColor": "#0a0e1a"
+      },
+      "package": "com.lucaschiari.GameManagerMobile",
+      "permissions": [],
+      "allowBackup": true,
+      "softwareKeyboardLayoutMode": "pan",
+      "jsEngine": "hermes",
+      "intentFilters": [
+        {
+          "action": "android.intent.action.MAIN",
+          "category": ["android.intent.category.LAUNCHER"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/controle-de-video-game.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "39d4d600-501a-46d1-ba56-43fccdf13ec5"
+      }
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0a0e1a",
+          "image": "./assets/controle-de-video-game.png",
+          "resizeMode": "contain"
+        }
+      ]
+    ],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/39d4d600-501a-46d1-ba56-43fccdf13ec5"
+    }
+  }
+}
