@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
-import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme } from 'react-native-paper';
+import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
+import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
 import { getConsoles, addConsole, updateConsole, deleteConsole } from '../services/storage';
 import { Console } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
-import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft } from 'lucide-react-native';
+import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,6 +12,8 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { requestNotificationPermissions } from '../services/notifications';
+import { useAlert } from '../contexts/AlertContext';
 
 // Lista de fabricantes disponíveis
 const FABRICANTES = ['Sony', 'Microsoft', 'Nintendo', 'Sega', 'Tectoy', 'Outros'];
@@ -37,6 +39,7 @@ type ConsolesScreenProps = {
 
 const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
   const theme = useTheme();
+  const { showAlert } = useAlert();
   const [consoles, setConsoles] = useState<Console[]>([]);
   const [filteredConsoles, setFilteredConsoles] = useState<Console[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,20 +66,30 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
     purchaseDate: '',
     lastMaintenanceDate: '',
     maintenanceDescription: '',
+    maintenanceInterval: 6, // Valor padrão: 6 meses
+    notifyMaintenance: true, // Ativar notificações por padrão
     imageUrl: '',
   });
 
+  // Função para validar formato de data (DD/MM/YYYY)
+  const isValidDate = (dateString: string) => {
+    const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
+    return dateRegex.test(dateString);
+  };
+
   const loadConsoles = async () => {
     try {
-      setLoading(true);
       const data = await getConsoles();
       setConsoles(data);
       setFilteredConsoles(data);
+      setLoading(false);
     } catch (error) {
       console.error('Erro ao carregar consoles:', error);
-      Alert.alert('Erro', 'Não foi possível carregar os consoles.');
-    } finally {
-      setLoading(false);
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível carregar os consoles.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -88,13 +101,13 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
 
   useEffect(() => {
     if (searchQuery || filters.brand || filters.model || filters.region) {
-      const filtered = consoles.filter(console => {
-        const matchesSearch = console.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            console.brand.toLowerCase().includes(searchQuery.toLowerCase());
+      const filtered = consoles.filter(consoleItem => {
+        const matchesSearch = consoleItem.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            consoleItem.brand.toLowerCase().includes(searchQuery.toLowerCase());
         
-        const matchesBrand = !filters.brand || console.brand === filters.brand;
-        const matchesModel = !filters.model || console.model === filters.model;
-        const matchesRegion = !filters.region || console.region === filters.region;
+        const matchesBrand = !filters.brand || consoleItem.brand === filters.brand;
+        const matchesModel = !filters.model || consoleItem.model === filters.model;
+        const matchesRegion = !filters.region || consoleItem.region === filters.region;
 
         return matchesSearch && matchesBrand && matchesModel && matchesRegion;
       });
@@ -122,30 +135,51 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
   }, []);
 
   const handleAddConsole = async () => {
+    // Validar campos obrigatórios
+    if (!formData.name || !formData.brand) {
+      showAlert({
+        title: 'Erro',
+        message: 'Por favor, preencha todos os campos obrigatórios.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
+      return;
+    }
+
+    // Validar formato da data de compra
+    if (formData.purchaseDate && !isValidDate(formData.purchaseDate)) {
+      showAlert({
+        title: 'Erro',
+        message: 'A data de compra deve estar no formato DD/MM/YYYY.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
+      return;
+    }
+
+    // Validar formato da data de manutenção
+    if (formData.lastMaintenanceDate && !isValidDate(formData.lastMaintenanceDate)) {
+      showAlert({
+        title: 'Erro',
+        message: 'A data de manutenção deve estar no formato DD/MM/YYYY.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
+      return;
+    }
+
     try {
-      if (!formData.name || !formData.brand || !formData.model || !formData.purchaseDate) {
-        Alert.alert('Erro', 'Por favor, preencha todos os campos obrigatórios.');
-        return;
-      }
-
-      // Validar formato da data (DD/MM/YYYY)
-      const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
-      if (!dateRegex.test(formData.purchaseDate)) {
-        Alert.alert('Erro', 'A data de compra deve estar no formato DD/MM/YYYY.');
-        return;
-      }
-
-      if (formData.lastMaintenanceDate && !dateRegex.test(formData.lastMaintenanceDate)) {
-        Alert.alert('Erro', 'A data de manutenção deve estar no formato DD/MM/YYYY.');
-        return;
-      }
-
       if (editingConsole) {
         await updateConsole(editingConsole.id, formData);
-        Alert.alert('Sucesso', 'Console atualizado com sucesso!');
+        showAlert({
+          title: 'Sucesso',
+          message: 'Console atualizado com sucesso!',
+          buttons: [{ text: 'OK', onPress: () => {} }]
+        });
       } else {
         await addConsole(formData);
-        Alert.alert('Sucesso', 'Console adicionado com sucesso!');
+        showAlert({
+          title: 'Sucesso',
+          message: 'Console adicionado com sucesso!',
+          buttons: [{ text: 'OK', onPress: () => {} }]
+        });
       }
 
       setModalVisible(false);
@@ -154,7 +188,11 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       loadConsoles();
     } catch (error) {
       console.error('Erro ao salvar console:', error);
-      Alert.alert('Erro', 'Não foi possível salvar o console.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível salvar o console.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -168,6 +206,8 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       purchaseDate: console.purchaseDate,
       lastMaintenanceDate: console.lastMaintenanceDate || '',
       maintenanceDescription: console.maintenanceDescription || '',
+      maintenanceInterval: console.maintenanceInterval || 6,
+      notifyMaintenance: console.notifyMaintenance !== undefined ? console.notifyMaintenance : true,
       imageUrl: console.imageUrl || '',
     });
     setModalVisible(true);
@@ -177,24 +217,32 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
   const handleDeleteConsole = async (id: string) => {
     try {
       await deleteConsole(id);
-      Alert.alert('Sucesso', 'Console excluído com sucesso!');
+      showAlert({
+        title: 'Sucesso',
+        message: 'Console excluído com sucesso!',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
       loadConsoles();
     } catch (error) {
       console.error('Erro ao excluir console:', error);
-      Alert.alert('Erro', 'Não foi possível excluir o console.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível excluir o console.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
     setMenuVisible(null);
   };
 
   const confirmDelete = (id: string) => {
-    Alert.alert(
-      'Confirmar exclusão',
-      'Tem certeza que deseja excluir este console?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
+    showAlert({
+      title: 'Confirmar exclusão',
+      message: 'Tem certeza que deseja excluir este console?',
+      buttons: [
+        { text: 'Cancelar', onPress: () => {}, style: 'cancel' },
         { text: 'Excluir', onPress: () => handleDeleteConsole(id), style: 'destructive' },
       ]
-    );
+    });
   };
 
   const resetForm = () => {
@@ -206,6 +254,8 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       purchaseDate: '',
       lastMaintenanceDate: '',
       maintenanceDescription: '',
+      maintenanceInterval: 6,
+      notifyMaintenance: true,
       imageUrl: '',
     });
   };
@@ -524,7 +574,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       <FAB
         icon={() => <Plus color="#fff" size={24} />}
         onPress={openModal}
-        style={commonStyles.fab}
+        style={[commonStyles.fab, { bottom: 0 }]}
       />
 
       <Portal>
@@ -647,7 +697,6 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
             </View>
 
             <View style={commonStyles.formGroup}>
-
               <DatePicker
                 label="Data de Compra"
                 value={formData.purchaseDate}
@@ -657,12 +706,62 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
             </View>
 
             <View style={commonStyles.formGroup}>
-
               <DatePicker
                 label="Data da Última Manutenção"
                 value={formData.lastMaintenanceDate}
                 onChange={(date) => setFormData({ ...formData, lastMaintenanceDate: date })}
                 style={commonStyles.formGroup}
+              />
+            </View>
+
+            <View style={commonStyles.formGroup}>
+              <Text style={commonStyles.label}>Intervalo de Manutenção (meses)</Text>
+              <View style={styles.intervalContainer}>
+                {[3, 6, 12, 24].map((months) => (
+                  <TouchableOpacity
+                    key={months}
+                    style={[
+                      styles.intervalButton,
+                      formData.maintenanceInterval === months && styles.intervalButtonActive
+                    ]}
+                    onPress={() => setFormData({ ...formData, maintenanceInterval: months })}
+                  >
+                    <Text
+                      style={[
+                        styles.intervalButtonText,
+                        formData.maintenanceInterval === months && styles.intervalButtonTextActive
+                      ]}
+                    >
+                      {months}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={[commonStyles.formGroup, styles.switchContainer]}>
+              <View style={styles.switchLabelContainer}>
+                <Bell size={18} color={theme.colors.onSurfaceVariant} />
+                <Text style={[commonStyles.label, styles.switchLabel]}>
+                  Notificar sobre manutenção
+                </Text>
+              </View>
+              <Switch
+                value={formData.notifyMaintenance}
+                onValueChange={async (value) => {
+                  setFormData({ ...formData, notifyMaintenance: value });
+                  if (value) {
+                    const permissionGranted = await requestNotificationPermissions();
+                    if (!permissionGranted) {
+                      showAlert({
+                        title: 'Permissão de Notificação',
+                        message: 'Para receber lembretes de manutenção, é necessário permitir notificações nas configurações do aplicativo.',
+                        buttons: [{ text: 'OK', onPress: () => {} }]
+                      });
+                    }
+                  }
+                }}
+                color={appColors.primary}
               />
             </View>
 
@@ -675,6 +774,8 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
                 mode="flat"
                 multiline
                 numberOfLines={3}
+                placeholder="Descreva a última manutenção realizada"
+                placeholderTextColor={theme.colors.onSurfaceVariant}
               />
             </View>
 
@@ -704,7 +805,11 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
                     try {
                       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
                       if (!permission.granted) {
-                        Alert.alert('Permissão necessária', 'Precisamos de acesso à sua galeria para selecionar uma imagem.');
+                        showAlert({
+                          title: 'Permissão necessária',
+                          message: 'Precisamos de acesso à sua galeria para selecionar uma imagem.',
+                          buttons: [{ text: 'OK', onPress: () => {} }]
+                        });
                         return;
                       }
 
@@ -727,7 +832,11 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
                       }
                     } catch (error) {
                       console.error('Erro ao selecionar imagem:', error);
-                      Alert.alert('Erro', 'Não foi possível selecionar a imagem.');
+                      showAlert({
+                        title: 'Erro',
+                        message: 'Não foi possível selecionar a imagem.',
+                        buttons: [{ text: 'OK', onPress: () => {} }]
+                      });
                     }
                   }}
                 >
@@ -989,6 +1098,43 @@ const styles = StyleSheet.create({
   },
   smallBadgeText: {
     fontSize: 11,
+    fontWeight: '600',
+  },
+  intervalContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  intervalButton: {
+    padding: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  intervalButtonActive: {
+    borderColor: appColors.primary,
+  },
+  intervalButtonText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  intervalButtonTextActive: {
+    color: appColors.primary,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  switchLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  switchLabel: {
+    color: '#94a3b8',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

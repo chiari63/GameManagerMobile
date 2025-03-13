@@ -9,6 +9,7 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { LogBox, AppState, AppStateStatus, Platform, View, Text, Dimensions } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import Constants from 'expo-constants';
+import { AlertProvider } from './src/contexts/AlertContext';
 
 // Log inicial do ambiente
 console.log('[App] Ambiente de execução:', {
@@ -160,10 +161,12 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <PaperProvider theme={darkTheme}>
           <SafeAreaProvider>
-            <View onLayout={onLayoutRootView} style={{ flex: 1 }}>
-              <Navigation />
-              <StatusBar style="light" />
-            </View>
+            <AlertProvider>
+              <View onLayout={onLayoutRootView} style={{ flex: 1 }}>
+                <Navigation />
+                <StatusBar style="light" />
+              </View>
+            </AlertProvider>
           </SafeAreaProvider>
         </PaperProvider>
       </QueryClientProvider>

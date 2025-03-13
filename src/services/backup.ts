@@ -31,29 +31,31 @@ class EventEmitter {
 export const backupEventEmitter = new EventEmitter();
 export const BACKUP_EVENTS = {
   RESTORE_COMPLETED: 'RESTORE_COMPLETED',
+  DATA_CHANGED: 'DATA_CHANGED',
 };
 
 // Chave do AsyncStorage
 const STORAGE_KEY = '@GameManager:data';
 
 // Função para converter imagem em base64
-const imageToBase64 = async (uri: string): Promise<string | null> => {
+const imageToBase64 = async (uri: string): Promise<string | undefined> => {
   try {
-    if (!uri) return null;
+    if (!uri) return undefined;
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
     return base64;
   } catch (error) {
     console.error('Erro ao converter imagem para base64:', error);
-    return null;
+    return undefined;
   }
 };
 
 // Função para salvar imagem base64 no dispositivo
-const base64ToImage = async (base64: string): Promise<string> => {
+const base64ToImage = async (base64: string, itemId: string = 'default'): Promise<string> => {
   try {
-    const fileName = `${FileSystem.documentDirectory}${Date.now()}.jpg`;
+    // Usar o ID do item como parte do nome do arquivo para garantir unicidade
+    const fileName = `${FileSystem.documentDirectory}${itemId}_${Date.now()}.jpg`;
     await FileSystem.writeAsStringAsync(fileName, base64, {
       encoding: FileSystem.EncodingType.Base64,
     });
@@ -66,45 +68,69 @@ const base64ToImage = async (base64: string): Promise<string> => {
 
 // Função para processar imagens dos itens
 const processItemsWithImages = async (items: any[]): Promise<any[]> => {
-  return await Promise.all(
-    items.map(async (item) => {
-      if (item.imageUrl) {
+  const processedItems = [];
+  
+  for (const item of items) {
+    if (item.imageUrl) {
+      try {
         const base64Image = await imageToBase64(item.imageUrl);
-        return {
-          ...item,
-          imageBase64: base64Image,
-          imageUrl: undefined // Removemos a URL original
-        };
+        if (base64Image) {
+          processedItems.push({
+            ...item,
+            imageBase64: base64Image,
+            imageUrl: undefined // Removemos a URL original
+          });
+          continue;
+        }
+      } catch (error) {
+        console.error(`Erro ao processar imagem para o item ${item.id}:`, error);
       }
-      return item;
-    })
-  );
+    }
+    // Se não tiver imagem ou ocorrer erro, adiciona o item sem modificações
+    processedItems.push({ ...item, imageUrl: undefined });
+  }
+  
+  return processedItems;
 };
 
 // Função para restaurar imagens dos itens
 const restoreItemsWithImages = async (items: any[]): Promise<any[]> => {
-  return await Promise.all(
-    items.map(async (item) => {
-      if (item.imageBase64) {
-        try {
-          const imageUrl = await base64ToImage(item.imageBase64);
-          return {
-            ...item,
-            imageUrl,
-            imageBase64: undefined // Removemos o base64 após restaurar
-          };
-        } catch (error) {
-          console.error('Erro ao restaurar imagem:', error);
-          return {
-            ...item,
-            imageUrl: null,
-            imageBase64: undefined
-          };
-        }
+  // Primeiro, limpar qualquer imagem antiga que possa estar no diretório
+  try {
+    const files = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
+    const imageFiles = files.filter(file => file.endsWith('.jpg'));
+    
+    console.log(`Encontradas ${imageFiles.length} imagens antigas para limpar`);
+    
+    // Não vamos excluir as imagens antigas ainda, apenas registrar que existem
+  } catch (error) {
+    console.error('Erro ao listar diretório de imagens:', error);
+  }
+  
+  const restoredItems = [];
+  
+  for (const item of items) {
+    // Verificar se o item tem uma imagem em base64 válida
+    if (item.imageBase64 && typeof item.imageBase64 === 'string' && item.id) {
+      try {
+        // Passar o ID do item para garantir nomes de arquivo únicos
+        const imageUrl = await base64ToImage(item.imageBase64, item.id);
+        console.log(`Imagem restaurada para o item ${item.id}: ${imageUrl}`);
+        restoredItems.push({
+          ...item,
+          imageUrl,
+          imageBase64: undefined // Removemos o base64 após restaurar
+        });
+        continue;
+      } catch (error) {
+        console.error(`Erro ao restaurar imagem para o item ${item.id}:`, error);
       }
-      return item;
-    })
-  );
+    }
+    // Se não tiver imagem em base64 ou ocorrer erro, adiciona o item sem imagem
+    restoredItems.push({ ...item, imageBase64: undefined, imageUrl: undefined });
+  }
+  
+  return restoredItems;
 };
 
 export const createBackup = async () => {
@@ -144,7 +170,7 @@ export const createBackup = async () => {
       accessories: processedAccessories,
       wishlist: processedWishlist,
       timestamp: new Date().toISOString(),
-      version: '1.1.0', // Atualizamos a versão para indicar suporte a imagens
+      version: '1.2.0', // Atualizamos a versão para indicar suporte a imagens melhorado
     };
 
     // Converte para JSON

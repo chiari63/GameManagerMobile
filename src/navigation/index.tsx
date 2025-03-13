@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View, Text } from 'react-native';
-import { Gamepad, Disc3, Gamepad2, Heart, Home } from 'lucide-react-native';
+import { Gamepad, Disc3, Gamepad2, Heart, Home, Wrench, Bell } from 'lucide-react-native';
 import { useTheme } from 'react-native-paper';
 import { Game, Console, Accessory } from '../types';
 
@@ -17,6 +17,8 @@ import {
   ConsoleDetailsScreen,
   AccessoryDetailsScreen,
   GameDetailsScreen,
+  MaintenanceScreen,
+  NotificationsScreen,
 } from '../screens';
 
 // Definição dos tipos para as pilhas de navegação
@@ -26,6 +28,12 @@ type MainTabParamList = {
   GamesStack: undefined;
   Home: undefined;
   Wishlist: undefined;
+};
+
+type RootStackParamList = {
+  MainTabs: undefined;
+  Maintenance: undefined;
+  Notifications: undefined;
 };
 
 type ConsolesStackParamList = {
@@ -54,6 +62,7 @@ const MainTab = createBottomTabNavigator<MainTabParamList>();
 const ConsolesStack = createNativeStackNavigator<ConsolesStackParamList>();
 const AccessoriesStack = createNativeStackNavigator<AccessoriesStackParamList>();
 const GamesStack = createNativeStackNavigator<GamesStackParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 // Navegador da pilha de consoles
 const ConsolesNavigator = () => {
@@ -167,7 +176,7 @@ const GamesNavigator = () => {
 };
 
 // Navegação principal
-const MainNavigator = () => {
+const MainTabNavigator = () => {
   const theme = useTheme();
   
   return (
@@ -256,11 +265,57 @@ const MainNavigator = () => {
   );
 };
 
+// Navegador raiz que contém todas as telas
+const RootNavigator = () => {
+  const theme = useTheme();
+  
+  return (
+    <RootStack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <RootStack.Screen 
+        name="MainTabs" 
+        component={MainTabNavigator} 
+      />
+      <RootStack.Screen 
+        name="Maintenance" 
+        component={MaintenanceScreen} 
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: theme.colors.surface },
+          headerTintColor: theme.colors.onSurface,
+          title: 'Manutenções Preventivas',
+          headerTitleStyle: {
+            fontSize: 22,
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <RootStack.Screen 
+        name="Notifications" 
+        component={NotificationsScreen} 
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: theme.colors.surface },
+          headerTintColor: theme.colors.onSurface,
+          title: 'Notificações',
+          headerTitleStyle: {
+            fontSize: 22,
+            fontWeight: 'bold',
+          },
+        }}
+      />
+    </RootStack.Navigator>
+  );
+};
+
 // Componente principal de navegação
 export const Navigation = () => {
   return (
     <NavigationContainer>
-      <MainNavigator />
+      <RootNavigator />
     </NavigationContainer>
   );
 }; 

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Game, Console, Accessory, WishlistItem, StorageData } from '../types';
+import { calculateNextMaintenanceDate, scheduleMaintenanceNotification } from './notifications';
 
 // Função para gerar ID único
 const generateId = () => {
@@ -96,23 +97,89 @@ export const getConsoles = async (): Promise<Console[]> => {
 
 export const addConsole = async (consoleData: Omit<Console, 'id'>): Promise<Console> => {
   const data = await getStorageData();
-  const newConsole = { ...consoleData, id: generateId() };
+  
+  // Calcular próxima data de manutenção se aplicável
+  let nextMaintenanceDate = undefined;
+  if (consoleData.lastMaintenanceDate && consoleData.maintenanceInterval) {
+    nextMaintenanceDate = calculateNextMaintenanceDate(
+      consoleData.lastMaintenanceDate,
+      consoleData.maintenanceInterval
+    );
+  }
+  
+  const newConsole = { 
+    ...consoleData, 
+    id: generateId(),
+    nextMaintenanceDate
+  };
+  
   data.consoles.push(newConsole);
   await saveStorageData(data);
+  
+  // Agendar notificação se necessário
+  if (newConsole.notifyMaintenance && newConsole.nextMaintenanceDate) {
+    await scheduleMaintenanceNotification(
+      newConsole.id,
+      newConsole.name,
+      'console',
+      newConsole.nextMaintenanceDate
+    );
+  }
+  
   return newConsole;
 };
 
 export const updateConsole = async (id: string, consoleData: Partial<Console>): Promise<void> => {
   const data = await getStorageData();
-  data.consoles = data.consoles.map(console => 
-    console.id === id ? { ...console, ...consoleData } : console
+  
+  // Encontrar o console atual
+  const currentConsole = data.consoles.find(consoleItem => consoleItem.id === id);
+  if (!currentConsole) {
+    throw new Error('Console não encontrado');
+  }
+  
+  // Verificar se precisamos recalcular a próxima data de manutenção
+  let nextMaintenanceDate = currentConsole.nextMaintenanceDate;
+  const shouldRecalculate = 
+    (consoleData.lastMaintenanceDate && consoleData.lastMaintenanceDate !== currentConsole.lastMaintenanceDate) ||
+    (consoleData.maintenanceInterval && consoleData.maintenanceInterval !== currentConsole.maintenanceInterval);
+  
+  if (shouldRecalculate) {
+    const lastMaintenanceDate = consoleData.lastMaintenanceDate || currentConsole.lastMaintenanceDate;
+    const maintenanceInterval = consoleData.maintenanceInterval || currentConsole.maintenanceInterval;
+    
+    if (lastMaintenanceDate && maintenanceInterval) {
+      nextMaintenanceDate = calculateNextMaintenanceDate(lastMaintenanceDate, maintenanceInterval);
+    }
+  }
+  
+  // Atualizar o console
+  const updatedConsole = { 
+    ...currentConsole, 
+    ...consoleData,
+    nextMaintenanceDate
+  };
+  
+  data.consoles = data.consoles.map(consoleItem => 
+    consoleItem.id === id ? updatedConsole : consoleItem
   );
+  
   await saveStorageData(data);
+  
+  // Atualizar notificação se necessário
+  if (updatedConsole.notifyMaintenance && updatedConsole.nextMaintenanceDate) {
+    await scheduleMaintenanceNotification(
+      updatedConsole.id,
+      updatedConsole.name,
+      'console',
+      updatedConsole.nextMaintenanceDate
+    );
+  }
 };
 
 export const deleteConsole = async (id: string): Promise<void> => {
   const data = await getStorageData();
-  data.consoles = data.consoles.filter(console => console.id !== id);
+  data.consoles = data.consoles.filter(consoleItem => consoleItem.id !== id);
   await saveStorageData(data);
 };
 
@@ -124,18 +191,84 @@ export const getAccessories = async (): Promise<Accessory[]> => {
 
 export const addAccessory = async (accessoryData: Omit<Accessory, 'id'>): Promise<Accessory> => {
   const data = await getStorageData();
-  const newAccessory = { ...accessoryData, id: generateId() };
+  
+  // Calcular próxima data de manutenção se aplicável
+  let nextMaintenanceDate = undefined;
+  if (accessoryData.lastMaintenanceDate && accessoryData.maintenanceInterval) {
+    nextMaintenanceDate = calculateNextMaintenanceDate(
+      accessoryData.lastMaintenanceDate,
+      accessoryData.maintenanceInterval
+    );
+  }
+  
+  const newAccessory = { 
+    ...accessoryData, 
+    id: generateId(),
+    nextMaintenanceDate
+  };
+  
   data.accessories.push(newAccessory);
   await saveStorageData(data);
+  
+  // Agendar notificação se necessário
+  if (newAccessory.notifyMaintenance && newAccessory.nextMaintenanceDate) {
+    await scheduleMaintenanceNotification(
+      newAccessory.id,
+      newAccessory.name,
+      'accessory',
+      newAccessory.nextMaintenanceDate
+    );
+  }
+  
   return newAccessory;
 };
 
 export const updateAccessory = async (id: string, accessoryData: Partial<Accessory>): Promise<void> => {
   const data = await getStorageData();
+  
+  // Encontrar o acessório atual
+  const currentAccessory = data.accessories.find(accessory => accessory.id === id);
+  if (!currentAccessory) {
+    throw new Error('Acessório não encontrado');
+  }
+  
+  // Verificar se precisamos recalcular a próxima data de manutenção
+  let nextMaintenanceDate = currentAccessory.nextMaintenanceDate;
+  const shouldRecalculate = 
+    (accessoryData.lastMaintenanceDate && accessoryData.lastMaintenanceDate !== currentAccessory.lastMaintenanceDate) ||
+    (accessoryData.maintenanceInterval && accessoryData.maintenanceInterval !== currentAccessory.maintenanceInterval);
+  
+  if (shouldRecalculate) {
+    const lastMaintenanceDate = accessoryData.lastMaintenanceDate || currentAccessory.lastMaintenanceDate;
+    const maintenanceInterval = accessoryData.maintenanceInterval || currentAccessory.maintenanceInterval;
+    
+    if (lastMaintenanceDate && maintenanceInterval) {
+      nextMaintenanceDate = calculateNextMaintenanceDate(lastMaintenanceDate, maintenanceInterval);
+    }
+  }
+  
+  // Atualizar o acessório
+  const updatedAccessory = { 
+    ...currentAccessory, 
+    ...accessoryData,
+    nextMaintenanceDate
+  };
+  
   data.accessories = data.accessories.map(accessory => 
-    accessory.id === id ? { ...accessory, ...accessoryData } : accessory
+    accessory.id === id ? updatedAccessory : accessory
   );
+  
   await saveStorageData(data);
+  
+  // Atualizar notificação se necessário
+  if (updatedAccessory.notifyMaintenance && updatedAccessory.nextMaintenanceDate) {
+    await scheduleMaintenanceNotification(
+      updatedAccessory.id,
+      updatedAccessory.name,
+      'accessory',
+      updatedAccessory.nextMaintenanceDate
+    );
+  }
 };
 
 export const deleteAccessory = async (id: string): Promise<void> => {

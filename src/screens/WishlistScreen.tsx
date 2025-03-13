@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, useTheme } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity } from 'react-native';
+import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, useTheme, Switch } from 'react-native-paper';
 import { getWishlistItems, addWishlistItem, updateWishlistItem, deleteWishlistItem } from '../services/storage';
 import { WishlistItem } from '../types';
 import { Heart, Plus, Edit, Trash2, ChevronDown, Tag, Type, Info, DollarSign, ChevronLeft } from 'lucide-react-native';
@@ -9,6 +9,7 @@ import { commonStyles } from '../theme/commonStyles';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useAlert } from '../contexts/AlertContext';
 
 type MainTabParamList = {
   Home: undefined;
@@ -26,6 +27,7 @@ const PRIORIDADES = ['baixa', 'média', 'alta'];
 const WishlistScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<WishlistScreenNavigationProp>();
+  const { showAlert } = useAlert();
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<WishlistItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,7 +83,11 @@ const WishlistScreen = () => {
       setFilteredItems(data);
     } catch (error) {
       console.error('Erro ao carregar lista de desejos:', error);
-      Alert.alert('Erro', 'Não foi possível carregar a lista de desejos.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível carregar a lista de desejos.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -109,11 +115,19 @@ const WishlistScreen = () => {
   const handleDelete = async (id: string) => {
     try {
       await deleteWishlistItem(id);
-      Alert.alert('Sucesso', 'Item removido da lista de desejos!');
+      showAlert({
+        title: 'Sucesso',
+        message: 'Item removido da lista de desejos!',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
       loadWishlist();
     } catch (error) {
       console.error('Erro ao excluir item:', error);
-      Alert.alert('Erro', 'Não foi possível excluir o item.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível excluir o item.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -127,16 +141,28 @@ const WishlistScreen = () => {
 
       if (editingItem) {
         await updateWishlistItem(editingItem.id, itemData);
-        Alert.alert('Sucesso', 'Item atualizado com sucesso!');
+        showAlert({
+          title: 'Sucesso',
+          message: 'Item atualizado com sucesso!',
+          buttons: [{ text: 'OK', onPress: () => {} }]
+        });
       } else {
         await addWishlistItem(itemData);
-        Alert.alert('Sucesso', 'Item adicionado com sucesso!');
+        showAlert({
+          title: 'Sucesso',
+          message: 'Item adicionado com sucesso!',
+          buttons: [{ text: 'OK', onPress: () => {} }]
+        });
       }
       setModalVisible(false);
       loadWishlist();
     } catch (error) {
       console.error('Erro ao salvar item:', error);
-      Alert.alert('Erro', 'Não foi possível salvar o item.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível salvar o item.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -244,7 +270,7 @@ const WishlistScreen = () => {
           });
           setModalVisible(true);
         }}
-        style={[commonStyles.fab, { backgroundColor: '#ff5757' }]}
+        style={[commonStyles.fab, { backgroundColor: '#ff5757', bottom: 0 }]}
       />
 
       <Portal>

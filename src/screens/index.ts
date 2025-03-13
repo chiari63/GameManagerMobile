@@ -5,4 +5,6 @@ export { default as ConsolesScreen } from './ConsolesScreen';
 export { default as AccessoriesScreen } from './AccessoriesScreen';
 export { default as WishlistScreen } from './WishlistScreen';
 export { default as ConsoleDetailsScreen } from './ConsoleDetailsScreen';
-export { default as AccessoryDetailsScreen } from './AccessoryDetailsScreen'; 
+export { default as AccessoryDetailsScreen } from './AccessoryDetailsScreen';
+export { default as MaintenanceScreen } from './MaintenanceScreen';
+export { default as NotificationsScreen } from './NotificationsScreen'; 

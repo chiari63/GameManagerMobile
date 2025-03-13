@@ -1,31 +1,45 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions, TouchableWithoutFeedback, Alert, RefreshControl } from 'react-native';
-import { Text, Card, useTheme, IconButton } from 'react-native-paper';
+import { Text, Card, useTheme, IconButton, Button } from 'react-native-paper';
 import { getGames, getConsoles, getAccessories, getWishlistItems } from '../services/storage';
-import { Gamepad, Disc3, Gamepad2, Heart, Menu as MenuIcon, X, Settings, Save, Upload, RefreshCw } from 'lucide-react-native';
+import { Gamepad, Disc3, Gamepad2, Heart, Menu as MenuIcon, X, Settings, Save, Upload, RefreshCw, Wrench } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { appColors } from '../theme';
 import { appConfig } from '../config/app';
 import { createBackup, restoreBackup, backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
+import NotificationIcon from '../components/NotificationIcon';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAlert } from '../contexts/AlertContext';
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.7;
 
 type MainTabParamList = {
   Home: undefined;
-  Games: undefined;
+  GamesStack: undefined;
   ConsolesStack: undefined;
   AccessoriesStack: undefined;
   Wishlist: undefined;
 };
 
-type HomeScreenNavigationProp = BottomTabNavigationProp<MainTabParamList>;
+type RootStackParamList = {
+  MainTabs: undefined;
+  Maintenance: undefined;
+  Notifications: undefined;
+};
+
+type HomeScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, 'Home'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
 
 const HomeScreen = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const theme = useTheme();
+  const { showAlert } = useAlert();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
@@ -46,6 +60,9 @@ const HomeScreen = () => {
           onPress={() => toggleDrawer()}
           style={{ marginLeft: 8 }}
         />
+      ),
+      headerRight: () => (
+        <NotificationIcon size={24} />
       ),
     });
   }, [navigation, theme]);
@@ -102,10 +119,11 @@ const HomeScreen = () => {
     } catch (error) {
       console.error('[HomeScreen] Erro ao carregar estatísticas:', error);
       setError('Não foi possível carregar as informações');
-      Alert.alert(
-        'Erro ao carregar dados',
-        'Não foi possível carregar as informações. Por favor, tente novamente.'
-      );
+      showAlert({
+        title: 'Erro ao carregar dados',
+        message: 'Não foi possível carregar as informações. Por favor, tente novamente.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -136,21 +154,50 @@ const HomeScreen = () => {
   const handleCreateBackup = async () => {
     try {
       await createBackup();
-      Alert.alert('Sucesso', 'Backup criado com sucesso!');
+      showAlert({
+        title: 'Sucesso',
+        message: 'Backup criado com sucesso!',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
       toggleDrawer();
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível criar o backup.');
+      console.error('Erro ao criar backup:', error);
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível criar o backup.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
   const handleRestoreBackup = async () => {
     try {
       await restoreBackup();
-      Alert.alert('Sucesso', 'Backup restaurado com sucesso!');
+      showAlert({
+        title: 'Sucesso',
+        message: 'Backup restaurado com sucesso!',
+        buttons: [{ text: 'OK', onPress: () => loadStats() }]
+      });
       toggleDrawer();
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível restaurar o backup.');
+      console.error('Erro ao restaurar backup:', error);
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível restaurar o backup.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
+  };
+
+  const confirmRestoreBackup = () => {
+    showAlert({
+      title: 'Restaurar Backup',
+      message: 'Tem certeza que deseja restaurar o backup? Isso substituirá todos os dados atuais.',
+      buttons: [
+        { text: 'Cancelar', onPress: () => {}, style: 'cancel' },
+        { text: 'Restaurar', onPress: handleRestoreBackup, style: 'destructive' },
+      ]
+    });
   };
 
   const renderDrawer = () => {
@@ -196,7 +243,7 @@ const HomeScreen = () => {
 
             <TouchableOpacity
               style={styles.drawerItem}
-              onPress={handleRestoreBackup}
+              onPress={confirmRestoreBackup}
             >
               <View style={styles.drawerItemIcon}>
                 <Upload color={theme.colors.onSurfaceVariant} size={20} />
@@ -205,6 +252,24 @@ const HomeScreen = () => {
                 <Text style={styles.drawerItemTitle}>Restaurar Backup</Text>
                 <Text style={styles.drawerItemDescription}>
                   Importar dados de um backup
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.drawerItem}
+              onPress={() => {
+                navigation.navigate('Maintenance');
+                toggleDrawer();
+              }}
+            >
+              <View style={styles.drawerItemIcon}>
+                <Wrench color={theme.colors.onSurfaceVariant} size={20} />
+              </View>
+              <View style={styles.drawerItemContent}>
+                <Text style={styles.drawerItemTitle}>Manutenções</Text>
+                <Text style={styles.drawerItemDescription}>
+                  Gerenciar manutenções preventivas
                 </Text>
               </View>
             </TouchableOpacity>
@@ -328,7 +393,7 @@ const HomeScreen = () => {
 
               <TouchableOpacity
                 style={styles.categoryCard}
-                onPress={() => navigation.navigate('Games')}
+                onPress={() => navigation.navigate('GamesStack')}
               >
                 <Card 
                   style={[
@@ -573,6 +638,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 10,
+  },
+  footer: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#94a3b8',
+    opacity: 0.8,
   },
 });
 

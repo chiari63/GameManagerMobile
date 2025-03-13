@@ -55,9 +55,9 @@ export const commonStyles = StyleSheet.create({
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 0,
     backgroundColor: appColors.primary,
     borderRadius: 16,
+    zIndex: 1,
   },
   modal: {
     backgroundColor: appColors.card,

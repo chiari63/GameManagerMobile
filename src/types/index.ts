@@ -19,6 +19,9 @@ export interface Console {
   purchaseDate: string;
   lastMaintenanceDate?: string;
   maintenanceDescription?: string;
+  maintenanceInterval?: number;
+  notifyMaintenance?: boolean;
+  nextMaintenanceDate?: string;
   imageUrl?: string;
 }
 
@@ -30,6 +33,9 @@ export interface Accessory {
   purchaseDate: string;
   lastMaintenanceDate?: string;
   maintenanceDescription?: string;
+  maintenanceInterval?: number;
+  notifyMaintenance?: boolean;
+  nextMaintenanceDate?: string;
   imageUrl?: string;
 }
 
@@ -47,4 +53,26 @@ export interface StorageData {
   consoles: Console[];
   accessories: Accessory[];
   wishlist: WishlistItem[];
+  notifications?: Notification[];
+}
+
+export interface MaintenanceItem {
+  id: string;
+  name: string;
+  type: 'console' | 'accessory';
+  itemType?: string;
+  nextMaintenanceDate: string;
+  daysRemaining: number;
+  lastMaintenanceDate?: string;
+}
+
+export interface Notification {
+  id: string;
+  title: string;
+  body: string;
+  date: string;
+  read: boolean;
+  itemId?: string;
+  itemType?: 'console' | 'accessory';
+  maintenanceDate?: string;
 } 

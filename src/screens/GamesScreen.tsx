@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image } from 'react-native';
-import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Switch, useTheme } from 'react-native-paper';
+import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
 import { getGames, addGame, updateGame, deleteGame, getConsoles } from '../services/storage';
 import { Game, Console } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
-import { Disc3, Plus, X, Image as ImageIcon, Calendar, ChevronDown, Upload, MoreVertical, SlidersHorizontal, ChevronLeft } from 'lucide-react-native';
+import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,6 +12,8 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { requestNotificationPermissions } from '../services/notifications';
+import { useAlert } from '../contexts/AlertContext';
 
 // Lista de regiões disponíveis
 const REGIOES = ['Americano', 'Japonês'];
@@ -34,6 +36,7 @@ type GamesScreenProps = {
 
 const GamesScreen = ({ navigation }: GamesScreenProps) => {
   const theme = useTheme();
+  const { showAlert } = useAlert();
   const [games, setGames] = useState<Game[]>([]);
   const [consoles, setConsoles] = useState<Console[]>([]);
   const [filteredGames, setFilteredGames] = useState<Game[]>([]);
@@ -48,8 +51,10 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
   const [filters, setFilters] = useState({
     genre: '',
     region: '',
+    consoleId: '',
   });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  const [filterConsoleMenuVisible, setFilterConsoleMenuVisible] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -73,7 +78,11 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       setConsoles(consolesData);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
-      Alert.alert('Erro', 'Não foi possível carregar os jogos.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível carregar os jogos.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -84,15 +93,16 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
   );
 
   useEffect(() => {
-    if (searchQuery || filters.genre || filters.region) {
+    if (searchQuery || filters.genre || filters.region || filters.consoleId) {
       const filtered = games.filter(game => {
         const matchesSearch = game.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             game.genre.toLowerCase().includes(searchQuery.toLowerCase());
         
         const matchesGenre = !filters.genre || game.genre === filters.genre;
         const matchesRegion = !filters.region || game.region === filters.region;
+        const matchesConsole = !filters.consoleId || game.consoleId === filters.consoleId;
 
-        return matchesSearch && matchesGenre && matchesRegion;
+        return matchesSearch && matchesGenre && matchesRegion && matchesConsole;
       });
       setFilteredGames(filtered);
     } else {
@@ -131,26 +141,48 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
     });
   }, [navigation, theme]);
 
+  // Função para validar formato de data (DD/MM/YYYY)
+  const isValidDate = (dateString: string) => {
+    const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
+    return dateRegex.test(dateString);
+  };
+
   const handleAddGame = async () => {
+    // Validar campos obrigatórios
+    if (!formData.name || !formData.consoleId || !formData.genre || !formData.purchaseDate) {
+      showAlert({
+        title: 'Erro',
+        message: 'Por favor, preencha todos os campos obrigatórios.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
+      return;
+    }
+
+    // Validar formato da data
+    if (!isValidDate(formData.purchaseDate)) {
+      showAlert({
+        title: 'Erro',
+        message: 'A data de compra deve estar no formato DD/MM/YYYY.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
+      return;
+    }
+
     try {
-      if (!formData.name || !formData.consoleId || !formData.genre || !formData.purchaseDate) {
-        Alert.alert('Erro', 'Por favor, preencha todos os campos obrigatórios.');
-        return;
-      }
-
-      // Validar formato da data (DD/MM/YYYY)
-      const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
-      if (!dateRegex.test(formData.purchaseDate)) {
-        Alert.alert('Erro', 'A data de compra deve estar no formato DD/MM/YYYY.');
-        return;
-      }
-
       if (editingGame) {
         await updateGame(editingGame.id, formData);
-        Alert.alert('Sucesso', 'Jogo atualizado com sucesso!');
+        showAlert({
+          title: 'Sucesso',
+          message: 'Jogo atualizado com sucesso!',
+          buttons: [{ text: 'OK', onPress: () => {} }]
+        });
       } else {
         await addGame(formData);
-        Alert.alert('Sucesso', 'Jogo adicionado com sucesso!');
+        showAlert({
+          title: 'Sucesso',
+          message: 'Jogo adicionado com sucesso!',
+          buttons: [{ text: 'OK', onPress: () => {} }]
+        });
       }
 
       setModalVisible(false);
@@ -159,7 +191,11 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       loadData();
     } catch (error) {
       console.error('Erro ao salvar jogo:', error);
-      Alert.alert('Erro', 'Não foi possível salvar o jogo.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível salvar o jogo.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -182,24 +218,32 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
   const handleDeleteGame = async (id: string) => {
     try {
       await deleteGame(id);
-      Alert.alert('Sucesso', 'Jogo excluído com sucesso!');
+      showAlert({
+        title: 'Sucesso',
+        message: 'Jogo excluído com sucesso!',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
       loadData();
     } catch (error) {
       console.error('Erro ao excluir jogo:', error);
-      Alert.alert('Erro', 'Não foi possível excluir o jogo.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível excluir o jogo.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
     setMenuVisible(null);
   };
 
   const confirmDelete = (id: string) => {
-    Alert.alert(
-      'Confirmar exclusão',
-      'Tem certeza que deseja excluir este jogo?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
+    showAlert({
+      title: 'Confirmar exclusão',
+      message: 'Tem certeza que deseja excluir este jogo?',
+      buttons: [
+        { text: 'Cancelar', onPress: () => {}, style: 'cancel' },
         { text: 'Excluir', onPress: () => handleDeleteGame(id), style: 'destructive' },
       ]
-    );
+    });
   };
 
   const resetForm = () => {
@@ -234,6 +278,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
     setFilters({
       genre: '',
       region: '',
+      consoleId: '',
     });
   };
 
@@ -331,6 +376,43 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
             </Menu>
           </View>
 
+          <View style={commonStyles.formGroup}>
+            <Text style={commonStyles.label}>Console</Text>
+            <Menu
+              visible={filterConsoleMenuVisible}
+              onDismiss={() => setFilterConsoleMenuVisible(false)}
+              anchor={
+                <TouchableOpacity
+                  onPress={() => setFilterConsoleMenuVisible(true)}
+                  style={[commonStyles.input, styles.menuButton]}
+                >
+                  <Text style={{ color: theme.colors.onSurface }}>
+                    {filters.consoleId ? getConsoleName(filters.consoleId) : 'Todos os consoles'}
+                  </Text>
+                  <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                </TouchableOpacity>
+              }
+            >
+              <Menu.Item
+                onPress={() => {
+                  setFilters(prev => ({ ...prev, consoleId: '' }));
+                  setFilterConsoleMenuVisible(false);
+                }}
+                title="Todos os consoles"
+              />
+              {consoles.map((console) => (
+                <Menu.Item
+                  key={console.id}
+                  onPress={() => {
+                    setFilters(prev => ({ ...prev, consoleId: console.id }));
+                    setFilterConsoleMenuVisible(false);
+                  }}
+                  title={console.name}
+                />
+              ))}
+            </Menu>
+          </View>
+
           <Button
             mode="contained"
             onPress={() => setFilterModalVisible(false)}
@@ -355,7 +437,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
             />
           ) : (
             <View style={styles.placeholderCover}>
-              <Disc3 color={appColors.primary} size={32} />
+              <Gamepad2 color={appColors.primary} size={32} />
             </View>
           )}
           <Card.Content style={styles.contentPadding}>
@@ -416,7 +498,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
   const EmptyState = () => (
     <View style={commonStyles.emptyState}>
       <View style={commonStyles.emptyStateIcon}>
-        <Disc3 color={appColors.primary} size={32} />
+        <Gamepad2 color={appColors.primary} size={32} />
       </View>
       <Text style={commonStyles.emptyStateText}>Nenhum jogo cadastrado</Text>
       <Text style={commonStyles.emptyStateSubtext}>
@@ -476,7 +558,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       <FAB
         icon={() => <Plus color="#fff" size={24} />}
         onPress={openModal}
-        style={commonStyles.fab}
+        style={[commonStyles.fab, { bottom: 0 }]}
       />
 
       <Portal>
@@ -655,7 +737,11 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
                     try {
                       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
                       if (!permission.granted) {
-                        Alert.alert('Permissão necessária', 'Precisamos de acesso à sua galeria para selecionar uma imagem.');
+                        showAlert({
+                          title: 'Permissão necessária',
+                          message: 'Precisamos de acesso à sua galeria para selecionar uma imagem.',
+                          buttons: [{ text: 'OK', onPress: () => {} }]
+                        });
                         return;
                       }
 
@@ -677,7 +763,11 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
                       }
                     } catch (error) {
                       console.error('Erro ao selecionar imagem:', error);
-                      Alert.alert('Erro', 'Não foi possível selecionar a imagem.');
+                      showAlert({
+                        title: 'Erro',
+                        message: 'Não foi possível selecionar a imagem.',
+                        buttons: [{ text: 'OK', onPress: () => {} }]
+                      });
                     }
                   }}
                 >

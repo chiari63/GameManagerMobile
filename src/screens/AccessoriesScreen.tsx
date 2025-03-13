@@ -4,7 +4,7 @@ import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Moda
 import { getAccessories, addAccessory, updateAccessory, deleteAccessory, getConsoles } from '../services/storage';
 import { Accessory, Console } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
-import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal, ChevronLeft } from 'lucide-react-native';
+import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal, ChevronLeft, Bell } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,6 +12,8 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { requestNotificationPermissions } from '../services/notifications';
+import { useAlert } from '../contexts/AlertContext';
 
 // Lista de tipos de acessórios disponíveis
 const TIPOS = ['Controles', 'Cabos', 'Memorycards', 'Outros'];
@@ -31,6 +33,7 @@ type AccessoriesScreenProps = {
 
 const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
   const theme = useTheme();
+  const { showAlert } = useAlert();
   const [accessories, setAccessories] = useState<Accessory[]>([]);
   const [filteredAccessories, setFilteredAccessories] = useState<Accessory[]>([]);
   const [consoles, setConsoles] = useState<Console[]>([]);
@@ -41,8 +44,10 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
   const [tipoMenuVisible, setTipoMenuVisible] = useState(false);
   const [consoleMenuVisible, setConsoleMenuVisible] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [filterConsoleMenuVisible, setFilterConsoleMenuVisible] = useState(false);
   const [filters, setFilters] = useState({
     type: '',
+    consoleId: '',
   });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
 
@@ -53,6 +58,8 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
     purchaseDate: '',
     lastMaintenanceDate: '',
     maintenanceDescription: '',
+    maintenanceInterval: 6, // Valor padrão: 6 meses
+    notifyMaintenance: true, // Ativar notificações por padrão
     imageUrl: '',
   });
 
@@ -67,7 +74,11 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       setConsoles(consolesData);
     } catch (error) {
       console.error('Erro ao carregar acessórios:', error);
-      Alert.alert('Erro', 'Não foi possível carregar os acessórios.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível carregar os acessórios.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -78,14 +89,16 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
   );
 
   useEffect(() => {
-    if (searchQuery || filters.type) {
+    if (searchQuery || filters.type || filters.consoleId) {
       const filtered = accessories.filter(accessory => {
         const matchesSearch = accessory.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             accessory.type.toLowerCase().includes(searchQuery.toLowerCase());
         
         const matchesType = !filters.type || accessory.type === filters.type;
+        
+        const matchesConsole = !filters.consoleId || accessory.consoleId === filters.consoleId;
 
-        return matchesSearch && matchesType;
+        return matchesSearch && matchesType && matchesConsole;
       });
       setFilteredAccessories(filtered);
     } else {
@@ -125,39 +138,56 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
   }, [navigation, theme]);
 
   const handleAddAccessory = async () => {
+    if (!formData.name || !formData.type) {
+      showAlert({
+        title: 'Campos obrigatórios',
+        message: 'Por favor, preencha o nome e o tipo do acessório.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
+      return;
+    }
+
     try {
-      if (!formData.name || !formData.type || !formData.consoleId || !formData.purchaseDate) {
-        Alert.alert('Erro', 'Por favor, preencha todos os campos obrigatórios.');
-        return;
-      }
-
-      // Validar formato da data (DD/MM/YYYY)
-      const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
-      if (!dateRegex.test(formData.purchaseDate)) {
-        Alert.alert('Erro', 'A data de compra deve estar no formato DD/MM/YYYY.');
-        return;
-      }
-
-      if (formData.lastMaintenanceDate && !dateRegex.test(formData.lastMaintenanceDate)) {
-        Alert.alert('Erro', 'A data de manutenção deve estar no formato DD/MM/YYYY.');
-        return;
-      }
+      const newAccessory: Omit<Accessory, 'id'> = {
+        name: formData.name,
+        type: formData.type,
+        consoleId: formData.consoleId,
+        purchaseDate: formData.purchaseDate,
+        lastMaintenanceDate: formData.lastMaintenanceDate,
+        maintenanceDescription: formData.maintenanceDescription,
+        maintenanceInterval: formData.maintenanceInterval,
+        notifyMaintenance: formData.notifyMaintenance,
+        imageUrl: formData.imageUrl,
+      };
 
       if (editingAccessory) {
-        await updateAccessory(editingAccessory.id, formData);
-        Alert.alert('Sucesso', 'Acessório atualizado com sucesso!');
+        await updateAccessory(editingAccessory.id, newAccessory);
+        showAlert({
+          title: 'Sucesso',
+          message: 'Acessório atualizado com sucesso!',
+          buttons: [{ text: 'OK', onPress: () => {} }]
+        });
       } else {
-        await addAccessory(formData);
-        Alert.alert('Sucesso', 'Acessório adicionado com sucesso!');
+        await addAccessory(newAccessory);
+        showAlert({
+          title: 'Sucesso',
+          message: 'Acessório adicionado com sucesso!',
+          buttons: [{ text: 'OK', onPress: () => {} }]
+        });
       }
 
+      resetForm();
       setModalVisible(false);
       setEditingAccessory(null);
-      resetForm();
       loadAccessories();
+      backupEventEmitter.emit(BACKUP_EVENTS.DATA_CHANGED);
     } catch (error) {
       console.error('Erro ao salvar acessório:', error);
-      Alert.alert('Erro', 'Não foi possível salvar o acessório.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível salvar o acessório.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
   };
 
@@ -170,6 +200,8 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       purchaseDate: accessory.purchaseDate,
       lastMaintenanceDate: accessory.lastMaintenanceDate || '',
       maintenanceDescription: accessory.maintenanceDescription || '',
+      maintenanceInterval: accessory.maintenanceInterval || 6,
+      notifyMaintenance: accessory.notifyMaintenance !== undefined ? accessory.notifyMaintenance : true,
       imageUrl: accessory.imageUrl || '',
     });
     setModalVisible(true);
@@ -179,24 +211,32 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
   const handleDeleteAccessory = async (id: string) => {
     try {
       await deleteAccessory(id);
-      Alert.alert('Sucesso', 'Acessório excluído com sucesso!');
+      showAlert({
+        title: 'Sucesso',
+        message: 'Acessório excluído com sucesso!',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
       loadAccessories();
     } catch (error) {
       console.error('Erro ao excluir acessório:', error);
-      Alert.alert('Erro', 'Não foi possível excluir o acessório.');
+      showAlert({
+        title: 'Erro',
+        message: 'Não foi possível excluir o acessório.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
     }
     setMenuVisible(null);
   };
 
   const confirmDelete = (id: string) => {
-    Alert.alert(
-      'Confirmar exclusão',
-      'Tem certeza que deseja excluir este acessório?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
+    showAlert({
+      title: 'Confirmar exclusão',
+      message: 'Tem certeza que deseja excluir este acessório?',
+      buttons: [
+        { text: 'Cancelar', onPress: () => {}, style: 'cancel' },
         { text: 'Excluir', onPress: () => handleDeleteAccessory(id), style: 'destructive' },
       ]
-    );
+    });
   };
 
   const resetForm = () => {
@@ -207,6 +247,8 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       purchaseDate: '',
       lastMaintenanceDate: '',
       maintenanceDescription: '',
+      maintenanceInterval: 6,
+      notifyMaintenance: true,
       imageUrl: '',
     });
   };
@@ -229,6 +271,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
   const handleResetFilters = () => {
     setFilters({
       type: '',
+      consoleId: '',
     });
   };
 
@@ -284,6 +327,43 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
                     setTipoMenuVisible(false);
                   }}
                   title={tipo}
+                />
+              ))}
+            </Menu>
+          </View>
+
+          <View style={commonStyles.formGroup}>
+            <Text style={commonStyles.label}>Console</Text>
+            <Menu
+              visible={filterConsoleMenuVisible}
+              onDismiss={() => setFilterConsoleMenuVisible(false)}
+              anchor={
+                <TouchableOpacity
+                  onPress={() => setFilterConsoleMenuVisible(true)}
+                  style={[commonStyles.input, styles.menuButton]}
+                >
+                  <Text style={{ color: theme.colors.onSurface }}>
+                    {filters.consoleId ? getConsoleName(filters.consoleId) : 'Todos os consoles'}
+                  </Text>
+                  <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                </TouchableOpacity>
+              }
+            >
+              <Menu.Item
+                onPress={() => {
+                  setFilters(prev => ({ ...prev, consoleId: '' }));
+                  setFilterConsoleMenuVisible(false);
+                }}
+                title="Todos os consoles"
+              />
+              {consoles.map((console) => (
+                <Menu.Item
+                  key={console.id}
+                  onPress={() => {
+                    setFilters(prev => ({ ...prev, consoleId: console.id }));
+                    setFilterConsoleMenuVisible(false);
+                  }}
+                  title={console.name}
                 />
               ))}
             </Menu>
@@ -425,7 +505,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       <FAB
         icon={() => <Plus color="#fff" size={24} />}
         onPress={openModal}
-        style={commonStyles.fab}
+        style={[commonStyles.fab, { bottom: 0 }]}
       />
 
       <Portal>
@@ -518,7 +598,6 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
             </View>
 
             <View style={commonStyles.formGroup}>
-
               <DatePicker
                 label="Data de Compra"
                 value={formData.purchaseDate}
@@ -537,6 +616,57 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
             </View>
 
             <View style={commonStyles.formGroup}>
+              <Text style={commonStyles.label}>Intervalo de Manutenção (meses)</Text>
+              <View style={styles.intervalContainer}>
+                {[3, 6, 12, 24].map((months) => (
+                  <TouchableOpacity
+                    key={months}
+                    style={[
+                      styles.intervalButton,
+                      formData.maintenanceInterval === months && styles.intervalButtonActive
+                    ]}
+                    onPress={() => setFormData({ ...formData, maintenanceInterval: months })}
+                  >
+                    <Text
+                      style={[
+                        styles.intervalButtonText,
+                        formData.maintenanceInterval === months && styles.intervalButtonTextActive
+                      ]}
+                    >
+                      {months}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={[commonStyles.formGroup, styles.switchContainer]}>
+              <View style={styles.switchLabelContainer}>
+                <Bell size={18} color={theme.colors.onSurfaceVariant} />
+                <Text style={[commonStyles.label, styles.switchLabel]}>
+                  Notificar sobre manutenção
+                </Text>
+              </View>
+              <Switch
+                value={formData.notifyMaintenance}
+                onValueChange={async (value) => {
+                  setFormData({ ...formData, notifyMaintenance: value });
+                  if (value) {
+                    const permissionGranted = await requestNotificationPermissions();
+                    if (!permissionGranted) {
+                      showAlert({
+                        title: 'Permissão de Notificação',
+                        message: 'Para receber lembretes de manutenção, é necessário permitir notificações nas configurações do aplicativo.',
+                        buttons: [{ text: 'OK', onPress: () => {} }]
+                      });
+                    }
+                  }
+                }}
+                color={appColors.primary}
+              />
+            </View>
+
+            <View style={commonStyles.formGroup}>
               <Text style={commonStyles.label}>Descrição da Manutenção</Text>
               <TextInput
                 value={formData.maintenanceDescription}
@@ -545,6 +675,8 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
                 mode="flat"
                 multiline
                 numberOfLines={3}
+                placeholder="Descreva a última manutenção realizada"
+                placeholderTextColor={theme.colors.onSurfaceVariant}
               />
             </View>
 
@@ -574,7 +706,11 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
                     try {
                       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
                       if (!permission.granted) {
-                        Alert.alert('Permissão necessária', 'Precisamos de acesso à sua galeria para selecionar uma imagem.');
+                        showAlert({
+                          title: 'Permissão necessária',
+                          message: 'Precisamos de acesso à sua galeria para selecionar uma imagem.',
+                          buttons: [{ text: 'OK', onPress: () => {} }]
+                        });
                         return;
                       }
 
@@ -596,7 +732,11 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
                       }
                     } catch (error) {
                       console.error('Erro ao selecionar imagem:', error);
-                      Alert.alert('Erro', 'Não foi possível selecionar a imagem.');
+                      showAlert({
+                        title: 'Erro',
+                        message: 'Não foi possível selecionar a imagem.',
+                        buttons: [{ text: 'OK', onPress: () => {} }]
+                      });
                     }
                   }}
                 >
@@ -815,6 +955,43 @@ const styles = StyleSheet.create({
   },
   smallBadgeText: {
     fontSize: 11,
+    fontWeight: '600',
+  },
+  intervalContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  intervalButton: {
+    padding: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  intervalButtonActive: {
+    borderColor: appColors.primary,
+  },
+  intervalButtonText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  intervalButtonTextActive: {
+    color: appColors.primary,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  switchLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  switchLabel: {
+    color: '#94a3b8',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

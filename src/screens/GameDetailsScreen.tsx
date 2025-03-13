@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, Image } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
-import { Disc3, Calendar, Tag, MapPin, Gamepad, ChevronLeft } from 'lucide-react-native';
+import { Disc3, Calendar, Tag, MapPin, Gamepad } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Game } from '../types';
@@ -57,14 +57,6 @@ const GameDetailsScreen = ({ route, navigation }: GameDetailsScreenProps) => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <ChevronLeft color={theme.colors.onSurface} size={24} />
-        </TouchableOpacity>
-      </View>
       {game.imageUrl ? (
         <View style={styles.imageContainer}>
           <Image source={{ uri: game.imageUrl }} style={styles.image} resizeMode="cover" />
@@ -125,14 +117,6 @@ const GameDetailsScreen = ({ route, navigation }: GameDetailsScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  backButton: {
-    padding: 8,
   },
   imageContainer: {
     width: '100%',
