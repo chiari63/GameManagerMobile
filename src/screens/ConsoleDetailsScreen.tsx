@@ -1,10 +1,18 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { Console } from '../types';
 import { commonStyles } from '../theme/commonStyles';
-import { Calendar, Settings, Gamepad } from 'lucide-react-native';
+import { Calendar, Settings, Gamepad, ChevronLeft } from 'lucide-react-native';
 import { appColors } from '../theme';
+import type { StackNavigationProp } from '@react-navigation/stack';
+
+type RootStackParamList = {
+  ConsolesStack: undefined;
+  ConsoleDetails: { console: Console };
+};
+
+type ConsoleDetailsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ConsoleDetails'>;
 
 type ConsoleDetailsScreenProps = {
   route: {
@@ -12,14 +20,23 @@ type ConsoleDetailsScreenProps = {
       console: Console;
     };
   };
+  navigation: ConsoleDetailsScreenNavigationProp;
 };
 
-const ConsoleDetailsScreen = ({ route }: ConsoleDetailsScreenProps) => {
+const ConsoleDetailsScreen = ({ route, navigation }: ConsoleDetailsScreenProps) => {
   const { console } = route.params;
   const theme = useTheme();
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <ChevronLeft color={theme.colors.onSurface} size={24} />
+        </TouchableOpacity>
+      </View>
       {console.imageUrl ? (
         <View style={styles.imageContainer}>
           <Image source={{ uri: console.imageUrl }} style={styles.image} resizeMode="cover" />
@@ -87,6 +104,14 @@ const ConsoleDetailsScreen = ({ route }: ConsoleDetailsScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  backButton: {
+    padding: 8,
   },
   imageContainer: {
     width: '100%',

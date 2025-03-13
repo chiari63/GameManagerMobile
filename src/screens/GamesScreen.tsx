@@ -4,13 +4,14 @@ import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Moda
 import { getGames, addGame, updateGame, deleteGame, getConsoles } from '../services/storage';
 import { Game, Console } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
-import { Disc3, Plus, X, Image as ImageIcon, Calendar, ChevronDown, Upload, MoreVertical, SlidersHorizontal } from 'lucide-react-native';
+import { Disc3, Plus, X, Image as ImageIcon, Calendar, ChevronDown, Upload, MoreVertical, SlidersHorizontal, ChevronLeft } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import { DatePicker } from '../components/DatePicker';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
 // Lista de regiões disponíveis
 const REGIOES = ['Americano', 'Japonês'];
@@ -18,8 +19,17 @@ const REGIOES = ['Americano', 'Japonês'];
 // Lista de gêneros disponíveis
 const GENEROS = ['Ação', 'Aventura', 'RPG', 'Estratégia', 'Esporte', 'Corrida', 'Luta', 'Plataforma', 'Outros'];
 
+type MainTabParamList = {
+  Home: undefined;
+  Games: undefined;
+  ConsolesStack: undefined;
+  AccessoriesStack: undefined;
+  Wishlist: undefined;
+  GameDetails: { game: Game };
+};
+
 type GamesScreenProps = {
-  navigation: any;
+  navigation: BottomTabNavigationProp<MainTabParamList>;
 };
 
 const GamesScreen = ({ navigation }: GamesScreenProps) => {
@@ -106,6 +116,20 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       backupEventEmitter.off(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
     };
   }, []);
+
+  // Adicionar listener para o botão de voltar na barra de navegação
+  useEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Home')}
+          style={{ marginLeft: 8 }}
+        >
+          <ChevronLeft color={theme.colors.onSurface} size={24} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
 
   const handleAddGame = async () => {
     try {
@@ -321,64 +345,72 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
   );
 
   const renderItem = ({ item }: { item: Game }) => (
-    <TouchableOpacity onPress={() => handleViewDetails(item)}>
-      <Card style={commonStyles.itemCard}>
-        {item.imageUrl ? (
-          <Card.Cover
-            source={{ uri: item.imageUrl }}
-            style={styles.cardCover}
-          />
-        ) : (
-          <View style={styles.placeholderCover}>
-            <Disc3 color={appColors.primary} size={32} />
-          </View>
-        )}
-        <Card.Content style={[commonStyles.itemCardContent, styles.contentPadding]}>
-          <View style={styles.cardHeader}>
-            <View>
-              <Text style={commonStyles.itemTitle}>{item.name}</Text>
-              <Text style={commonStyles.itemSubtitle}>{getConsoleName(item.consoleId)}</Text>
+    <View style={styles.cardContainer}>
+      <TouchableOpacity onPress={() => handleViewDetails(item)}>
+        <Card style={styles.fixedSizeCard}>
+          {item.imageUrl ? (
+            <Card.Cover
+              source={{ uri: item.imageUrl }}
+              style={styles.cardCover}
+            />
+          ) : (
+            <View style={styles.placeholderCover}>
+              <Disc3 color={appColors.primary} size={32} />
             </View>
-            <Menu
-              visible={menuVisible === item.id}
-              onDismiss={() => setMenuVisible(null)}
-              anchor={
-                <IconButton
-                  icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
-                  onPress={() => setMenuVisible(item.id)}
-                />
-              }
-            >
-              <Menu.Item 
-                onPress={() => {
-                  setMenuVisible(null);
-                  handleEditGame(item);
-                }} 
-                title="Editar" 
-              />
-              <Menu.Item 
-                onPress={() => {
-                  setMenuVisible(null);
-                  confirmDelete(item.id);
-                }} 
-                title="Excluir"
-                titleStyle={{ color: appColors.destructive }}
-              />
-            </Menu>
-          </View>
-          <View style={styles.badgeContainer}>
-            <View style={commonStyles.badge}>
-              <Text style={commonStyles.badgeText}>{item.genre}</Text>
-            </View>
-            {item.region && (
-              <View style={[commonStyles.badge, { marginLeft: 8 }]}>
-                <Text style={commonStyles.badgeText}>{item.region}</Text>
+          )}
+          <Card.Content style={styles.contentPadding}>
+            <View style={styles.cardHeader}>
+              <View style={styles.titleContainer}>
+                <Text style={[commonStyles.itemTitle, styles.cardTitle]} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
+                <Text style={[commonStyles.itemSubtitle, styles.cardSubtitle]} numberOfLines={1} ellipsizeMode="tail">{getConsoleName(item.consoleId)}</Text>
               </View>
-            )}
-          </View>
-        </Card.Content>
-      </Card>
-    </TouchableOpacity>
+              <Menu
+                visible={menuVisible === item.id}
+                onDismiss={() => setMenuVisible(null)}
+                anchor={
+                  <IconButton
+                    icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
+                    onPress={() => setMenuVisible(item.id)}
+                    size={20}
+                    style={styles.menuIcon}
+                  />
+                }
+              >
+                <Menu.Item 
+                  onPress={() => {
+                    setMenuVisible(null);
+                    handleEditGame(item);
+                  }} 
+                  title="Editar" 
+                />
+                <Menu.Item 
+                  onPress={() => {
+                    setMenuVisible(null);
+                    confirmDelete(item.id);
+                  }} 
+                  title="Excluir"
+                  titleStyle={{ color: appColors.destructive }}
+                />
+              </Menu>
+            </View>
+            <View style={styles.badgeContainer}>
+              <View style={[commonStyles.badge, styles.smallBadge]}>
+                <Text style={[commonStyles.badgeText, styles.smallBadgeText]}>{item.genre}</Text>
+              </View>
+              {item.isPhysical ? (
+                <View style={[commonStyles.badge, styles.smallBadge, { marginLeft: 4, backgroundColor: 'rgba(74, 222, 128, 0.1)' }]}>
+                  <Text style={[commonStyles.badgeText, styles.smallBadgeText, { color: '#4ade80' }]}>Físico</Text>
+                </View>
+              ) : (
+                <View style={[commonStyles.badge, styles.smallBadge, { marginLeft: 4, backgroundColor: 'rgba(251, 113, 133, 0.1)' }]}>
+                  <Text style={[commonStyles.badgeText, styles.smallBadgeText, { color: '#fb7185' }]}>Digital</Text>
+                </View>
+              )}
+            </View>
+          </Card.Content>
+        </Card>
+      </TouchableOpacity>
+    </View>
   );
 
   const EmptyState = () => (
@@ -452,6 +484,8 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
           visible={modalVisible}
           onDismiss={() => setModalVisible(false)}
           contentContainerStyle={commonStyles.modal}
+          dismissable={true}
+          dismissableBackButton={true}
         >
           <ScrollView>
             <Text style={commonStyles.modalTitle}>
@@ -466,6 +500,11 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
                 style={commonStyles.input}
                 mode="flat"
                 placeholder="Ex: The Last of Us Part II"
+                autoCapitalize="none"
+                autoCorrect={false}
+                blurOnSubmit={false}
+                selectionColor="#ffffff"
+                underlineColorAndroid="transparent"
               />
             </View>
 
@@ -681,18 +720,133 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
 
 const styles = StyleSheet.create({
   listContentContainer: {
-    paddingHorizontal: 12,
+    padding: 8,
   },
   columnWrapper: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    marginHorizontal: -8,
+    paddingHorizontal: 8,
+  },
+  cardContainer: {
+    width: '48%',
+    marginHorizontal: 4,
+    marginBottom: 16,
+  },
+  fixedSizeCard: {
+    flex: 0,
+    width: '100%',
+    overflow: 'hidden',
   },
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+  },
+  titleContainer: {
+    flex: 1,
+    marginRight: 4,
+    minHeight: 42,
+  },
+  cardTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    marginBottom: 4,
+    height: 36,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  cardCover: {
+    height: 140,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  placeholderCover: {
+    height: 140,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  contentPadding: {
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  menuIcon: {
+    padding: 8,
+  },
+  smallBadge: {
+    padding: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+  },
+  smallBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  searchContainer: {
+    flex: 1,
+  },
+  filterButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  filterButtonActive: {
+    backgroundColor: appColors.primary,
+    borderColor: 'transparent',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  filterBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  resetButton: {
+    color: appColors.primary,
+    fontSize: 14,
   },
   imageUploader: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -744,88 +898,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginBottom: 0,
   },
-  cardCover: {
-    height: 140,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  placeholderCover: {
-    height: 140,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  contentPadding: {
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 4,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    marginTop: 12,
-  },
   switchContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  searchContainer: {
-    flex: 1,
-  },
-  filterButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  filterButtonActive: {
-    backgroundColor: appColors.primary,
-    borderColor: 'transparent',
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  filterBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  resetButton: {
-    color: appColors.primary,
-    fontSize: 14,
   },
 });
 

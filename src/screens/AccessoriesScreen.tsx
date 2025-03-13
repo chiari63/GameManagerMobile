@@ -1,22 +1,32 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image } from 'react-native';
-import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, useTheme } from 'react-native-paper';
+import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Switch, useTheme } from 'react-native-paper';
 import { getAccessories, addAccessory, updateAccessory, deleteAccessory, getConsoles } from '../services/storage';
 import { Accessory, Console } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
-import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal } from 'lucide-react-native';
+import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal, ChevronLeft } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import { DatePicker } from '../components/DatePicker';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
 // Lista de tipos de acessórios disponíveis
 const TIPOS = ['Controles', 'Cabos', 'Memorycards', 'Outros'];
 
+type MainTabParamList = {
+  Home: undefined;
+  Games: undefined;
+  ConsolesStack: undefined;
+  AccessoriesStack: undefined;
+  Wishlist: undefined;
+  AccessoryDetails: { accessory: Accessory };
+};
+
 type AccessoriesScreenProps = {
-  navigation: any;
+  navigation: BottomTabNavigationProp<MainTabParamList>;
 };
 
 const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
@@ -99,6 +109,20 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       backupEventEmitter.off(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
     };
   }, []);
+
+  // Adicionar listener para o botão de voltar na barra de navegação
+  useEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Home')}
+          style={{ marginLeft: 8 }}
+        >
+          <ChevronLeft color={theme.colors.onSurface} size={24} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
 
   const handleAddAccessory = async () => {
     try {
@@ -279,59 +303,63 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
   );
 
   const renderItem = ({ item }: { item: Accessory }) => (
-    <TouchableOpacity onPress={() => handleViewDetails(item)}>
-      <Card style={commonStyles.itemCard}>
-        {item.imageUrl ? (
-          <Card.Cover
-            source={{ uri: item.imageUrl }}
-            style={styles.cardCover}
-          />
-        ) : (
-          <View style={styles.placeholderCover}>
-            <Gamepad2 color={appColors.primary} size={32} />
-          </View>
-        )}
-        <Card.Content style={[commonStyles.itemCardContent, styles.contentPadding]}>
-          <View style={styles.cardHeader}>
-            <View>
-              <Text style={commonStyles.itemTitle}>{item.name}</Text>
-              <Text style={commonStyles.itemSubtitle}>{getConsoleName(item.consoleId)}</Text>
+    <View style={styles.cardContainer}>
+      <TouchableOpacity onPress={() => handleViewDetails(item)}>
+        <Card style={styles.fixedSizeCard}>
+          {item.imageUrl ? (
+            <Card.Cover
+              source={{ uri: item.imageUrl }}
+              style={styles.cardCover}
+            />
+          ) : (
+            <View style={styles.placeholderCover}>
+              <Gamepad2 color={appColors.primary} size={32} />
             </View>
-            <Menu
-              visible={menuVisible === item.id}
-              onDismiss={() => setMenuVisible(null)}
-              anchor={
-                <IconButton
-                  icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
-                  onPress={() => setMenuVisible(item.id)}
+          )}
+          <Card.Content style={styles.contentPadding}>
+            <View style={styles.cardHeader}>
+              <View style={styles.titleContainer}>
+                <Text style={[commonStyles.itemTitle, styles.cardTitle]} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
+                <Text style={[commonStyles.itemSubtitle, styles.cardSubtitle]} numberOfLines={1} ellipsizeMode="tail">{getConsoleName(item.consoleId)}</Text>
+              </View>
+              <Menu
+                visible={menuVisible === item.id}
+                onDismiss={() => setMenuVisible(null)}
+                anchor={
+                  <IconButton
+                    icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
+                    onPress={() => setMenuVisible(item.id)}
+                    size={20}
+                    style={styles.menuIcon}
+                  />
+                }
+              >
+                <Menu.Item 
+                  onPress={() => {
+                    setMenuVisible(null);
+                    handleEditAccessory(item);
+                  }} 
+                  title="Editar" 
                 />
-              }
-            >
-              <Menu.Item 
-                onPress={() => {
-                  setMenuVisible(null);
-                  handleEditAccessory(item);
-                }} 
-                title="Editar" 
-              />
-              <Menu.Item 
-                onPress={() => {
-                  setMenuVisible(null);
-                  confirmDelete(item.id);
-                }} 
-                title="Excluir"
-                titleStyle={{ color: appColors.destructive }}
-              />
-            </Menu>
-          </View>
-          <View style={styles.badgeContainer}>
-            <View style={commonStyles.badge}>
-              <Text style={commonStyles.badgeText}>{item.type}</Text>
+                <Menu.Item 
+                  onPress={() => {
+                    setMenuVisible(null);
+                    confirmDelete(item.id);
+                  }} 
+                  title="Excluir"
+                  titleStyle={{ color: appColors.destructive }}
+                />
+              </Menu>
             </View>
-        </View>
-      </Card.Content>
-    </Card>
-    </TouchableOpacity>
+            <View style={styles.badgeContainer}>
+              <View style={[commonStyles.badge, styles.smallBadge]}>
+                <Text style={[commonStyles.badgeText, styles.smallBadgeText]}>{item.type}</Text>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+      </TouchableOpacity>
+    </View>
   );
 
   const EmptyState = () => (
@@ -405,6 +433,8 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
           visible={modalVisible}
           onDismiss={() => setModalVisible(false)}
           contentContainerStyle={commonStyles.modal}
+          dismissable={true}
+          dismissableBackButton={true}
         >
           <ScrollView>
             <Text style={commonStyles.modalTitle}>
@@ -418,7 +448,12 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
                 onChangeText={(text) => setFormData({ ...formData, name: text })}
                 style={commonStyles.input}
                 mode="flat"
-                placeholder="Ex: Controle DualSense"
+                placeholder="Ex: DualSense"
+                autoCapitalize="none"
+                autoCorrect={false}
+                blurOnSubmit={false}
+                selectionColor="#ffffff"
+                underlineColorAndroid="transparent"
               />
             </View>
 
@@ -604,18 +639,121 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
 
 const styles = StyleSheet.create({
   listContentContainer: {
-    paddingHorizontal: 12,
+    padding: 8,
   },
   columnWrapper: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    marginHorizontal: -8,
+    paddingHorizontal: 8,
+  },
+  cardContainer: {
+    width: '48%',
+    marginHorizontal: 4,
+    marginBottom: 16,
+  },
+  fixedSizeCard: {
+    flex: 0,
+    width: '100%',
+    overflow: 'hidden',
   },
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+  },
+  titleContainer: {
+    flex: 1,
+    marginRight: 4,
+    minHeight: 42,
+  },
+  cardTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    marginBottom: 4,
+    height: 36,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  cardCover: {
+    height: 140,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  placeholderCover: {
+    height: 140,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  contentPadding: {
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  searchContainer: {
+    flex: 1,
+  },
+  filterButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  filterButtonActive: {
+    backgroundColor: appColors.primary,
+    borderColor: 'transparent',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  filterBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  resetButton: {
+    color: appColors.primary,
+    fontSize: 14,
   },
   imageUploader: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -667,82 +805,17 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginBottom: 0,
   },
-  cardCover: {
-    height: 140,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+  menuIcon: {
+    padding: 8,
   },
-  placeholderCover: {
-    height: 140,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  contentPadding: {
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 4,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    marginTop: 12,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  searchContainer: {
-    flex: 1,
-  },
-  filterButton: {
-    width: 48,
-    height: 48,
+  smallBadge: {
+    padding: 6,
+    paddingHorizontal: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  filterButtonActive: {
-    backgroundColor: appColors.primary,
-    borderColor: 'transparent',
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  filterBadgeText: {
-    color: '#fff',
-    fontSize: 12,
+  smallBadgeText: {
+    fontSize: 11,
     fontWeight: '600',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  resetButton: {
-    color: appColors.primary,
-    fontSize: 14,
   },
 });
 

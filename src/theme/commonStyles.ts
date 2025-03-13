@@ -82,6 +82,8 @@ export const commonStyles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.1)',
     marginBottom: 8,
     height: 48,
+    color: '#ffffff',
+    paddingHorizontal: 16,
   },
   label: {
     fontSize: 14,

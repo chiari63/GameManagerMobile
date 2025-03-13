@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
-import { Disc3, Calendar, Tag, MapPin, Gamepad } from 'lucide-react-native';
+import { Disc3, Calendar, Tag, MapPin, Gamepad, ChevronLeft } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Game } from '../types';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import { getConsoles } from '../services/storage';
+import { useNavigation } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+
+type RootStackParamList = {
+  Games: undefined;
+  GameDetails: { game: Game };
+};
+
+type GameDetailsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'GameDetails'>;
 
 type GameDetailsScreenProps = {
   route: {
@@ -15,9 +24,10 @@ type GameDetailsScreenProps = {
       game: Game;
     };
   };
+  navigation: GameDetailsScreenNavigationProp;
 };
 
-const GameDetailsScreen = ({ route }: GameDetailsScreenProps) => {
+const GameDetailsScreen = ({ route, navigation }: GameDetailsScreenProps) => {
   const { game } = route.params;
   const theme = useTheme();
   const [consoleName, setConsoleName] = useState<string>('');
@@ -47,6 +57,14 @@ const GameDetailsScreen = ({ route }: GameDetailsScreenProps) => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <ChevronLeft color={theme.colors.onSurface} size={24} />
+        </TouchableOpacity>
+      </View>
       {game.imageUrl ? (
         <View style={styles.imageContainer}>
           <Image source={{ uri: game.imageUrl }} style={styles.image} resizeMode="cover" />
@@ -107,6 +125,14 @@ const GameDetailsScreen = ({ route }: GameDetailsScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  backButton: {
+    padding: 8,
   },
   imageContainer: {
     width: '100%',

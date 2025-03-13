@@ -3,16 +3,29 @@ import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity } from 
 import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, useTheme } from 'react-native-paper';
 import { getWishlistItems, addWishlistItem, updateWishlistItem, deleteWishlistItem } from '../services/storage';
 import { WishlistItem } from '../types';
-import { Heart, Plus, Edit, Trash2, ChevronDown, Tag, Type, Info, DollarSign } from 'lucide-react-native';
+import { Heart, Plus, Edit, Trash2, ChevronDown, Tag, Type, Info, DollarSign, ChevronLeft } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
+import { useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+
+type MainTabParamList = {
+  Home: undefined;
+  Games: undefined;
+  ConsolesStack: undefined;
+  AccessoriesStack: undefined;
+  Wishlist: undefined;
+};
+
+type WishlistScreenNavigationProp = BottomTabNavigationProp<MainTabParamList>;
 
 const TIPOS = ['game', 'console', 'accessory', 'other'];
 const PRIORIDADES = ['baixa', 'média', 'alta'];
 
 const WishlistScreen = () => {
   const theme = useTheme();
+  const navigation = useNavigation<WishlistScreenNavigationProp>();
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<WishlistItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +55,24 @@ const WishlistScreen = () => {
       backupEventEmitter.off(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
     };
   }, []);
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Home')}
+          style={{ marginLeft: 8 }}
+        >
+          <ChevronLeft color={theme.colors.onSurface} size={24} />
+        </TouchableOpacity>
+      ),
+      headerTitle: () => (
+        <Text style={{ color: theme.colors.onSurface, fontSize: 22, fontWeight: 'bold' }}>
+          Lista de Desejos
+        </Text>
+      )
+    });
+  }, [navigation, theme]);
 
   const loadWishlist = async () => {
     try {
@@ -118,7 +149,7 @@ const WishlistScreen = () => {
       case 'baixa':
         return '#10b981';
       default:
-        return appColors.primary;
+        return '#ff5757';
     }
   };
 
@@ -161,8 +192,8 @@ const WishlistScreen = () => {
 
   const EmptyState = () => (
     <View style={commonStyles.emptyState}>
-      <View style={commonStyles.emptyStateIcon}>
-        <Heart color={appColors.primary} size={32} />
+      <View style={[commonStyles.emptyStateIcon, { backgroundColor: 'rgba(255, 87, 87, 0.1)' }]}>
+        <Heart color="#ff5757" size={32} />
       </View>
       <Text style={commonStyles.emptyStateText}>Lista de desejos vazia</Text>
       <Text style={commonStyles.emptyStateSubtext}>
@@ -174,16 +205,18 @@ const WishlistScreen = () => {
   return (
     <View style={[commonStyles.container, { backgroundColor: theme.colors.background }]}>
       <View style={commonStyles.header}>
-        <View style={commonStyles.searchContainer}>
-          <Searchbar
-            placeholder="Buscar na lista de desejos..."
-            onChangeText={handleSearch}
-            value={searchQuery}
-            style={commonStyles.searchbar}
-            iconColor={theme.colors.onSurfaceVariant}
-            inputStyle={{ color: theme.colors.onSurface }}
-            placeholderTextColor={theme.colors.onSurfaceVariant}
-          />
+        <View style={styles.searchRow}>
+          <View style={styles.searchContainer}>
+            <Searchbar
+              placeholder="Buscar na lista de desejos..."
+              onChangeText={handleSearch}
+              value={searchQuery}
+              style={commonStyles.searchbar}
+              iconColor={theme.colors.onSurfaceVariant}
+              inputStyle={{ color: theme.colors.onSurface }}
+              placeholderTextColor={theme.colors.onSurfaceVariant}
+            />
+          </View>
         </View>
       </View>
 
@@ -219,6 +252,8 @@ const WishlistScreen = () => {
           visible={modalVisible}
           onDismiss={() => setModalVisible(false)}
           contentContainerStyle={[commonStyles.modal, { maxHeight: '90%' }]}
+          dismissable={true}
+          dismissableBackButton={true}
         >
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={styles.modalHeader}>
@@ -236,10 +271,15 @@ const WishlistScreen = () => {
               <TextInput
                 value={formData.name}
                 onChangeText={(text) => setFormData({ ...formData, name: text })}
-                style={[commonStyles.input, styles.enhancedInput]}
+                style={commonStyles.input}
                 mode="flat"
                 placeholder="Ex: PlayStation 5"
                 placeholderTextColor={theme.colors.onSurfaceVariant}
+                autoCapitalize="none"
+                autoCorrect={false}
+                blurOnSubmit={false}
+                selectionColor="#ffffff"
+                underlineColorAndroid="transparent"
               />
             </View>
 
@@ -254,7 +294,7 @@ const WishlistScreen = () => {
                 anchor={
                   <TouchableOpacity
                     onPress={() => setTypeMenuVisible(true)}
-                    style={[commonStyles.input, styles.enhancedInput, styles.menuButton]}
+                    style={[commonStyles.input, styles.menuButton]}
                   >
                     <Text style={{ color: theme.colors.onSurface }}>
                       {formData.type.charAt(0).toUpperCase() + formData.type.slice(1)}
@@ -285,18 +325,22 @@ const WishlistScreen = () => {
               <TextInput
                 value={formData.description}
                 onChangeText={(text) => setFormData({ ...formData, description: text })}
-                style={[commonStyles.input, styles.enhancedInput, styles.textArea]}
+                style={[commonStyles.input, styles.textArea]}
                 mode="flat"
                 multiline
                 numberOfLines={3}
                 placeholder="Adicione uma descrição"
                 placeholderTextColor={theme.colors.onSurfaceVariant}
+                autoCapitalize="none"
+                autoCorrect={false}
+                selectionColor="#ffffff"
+                underlineColorAndroid="transparent"
               />
             </View>
 
             <View style={commonStyles.formGroup}>
               <View style={styles.labelContainer}>
-                <Heart size={18} color={theme.colors.onSurfaceVariant} />
+                <Heart size={18} color="#ff5757" />
                 <Text style={[commonStyles.label, styles.labelText]}>Prioridade</Text>
               </View>
               <View style={styles.priorityContainer}>
@@ -331,11 +375,16 @@ const WishlistScreen = () => {
               <TextInput
                 value={formData.estimatedPrice}
                 onChangeText={(text) => setFormData({ ...formData, estimatedPrice: text })}
-                style={[commonStyles.input, styles.enhancedInput]}
+                style={commonStyles.input}
                 mode="flat"
                 keyboardType="numeric"
                 placeholder="R$ 0,00"
                 placeholderTextColor={theme.colors.onSurfaceVariant}
+                autoCapitalize="none"
+                autoCorrect={false}
+                blurOnSubmit={false}
+                selectionColor="#ffffff"
+                underlineColorAndroid="transparent"
               />
             </View>
 
@@ -423,20 +472,19 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginBottom: 0,
   },
-  enhancedInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 16,
-    height: 48,
-    color: '#ffffff',
-  },
   textArea: {
     height: 100,
     paddingTop: 12,
     paddingBottom: 12,
     textAlignVertical: 'top',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  searchContainer: {
+    flex: 1,
   },
 });
 

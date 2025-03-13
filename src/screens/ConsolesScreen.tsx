@@ -4,13 +4,14 @@ import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Moda
 import { getConsoles, addConsole, updateConsole, deleteConsole } from '../services/storage';
 import { Console } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
-import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal } from 'lucide-react-native';
+import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import { DatePicker } from '../components/DatePicker';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
 // Lista de fabricantes disponíveis
 const FABRICANTES = ['Sony', 'Microsoft', 'Nintendo', 'Sega', 'Tectoy', 'Outros'];
@@ -21,8 +22,17 @@ const MODELOS = ['Fat', 'Slim', 'Super Slim', 'Pró', 'Meio de geração'];
 // Lista de regiões disponíveis
 const REGIOES = ['Americano', 'Japonês'];
 
+type MainTabParamList = {
+  Home: undefined;
+  Games: undefined;
+  ConsolesStack: undefined;
+  AccessoriesStack: undefined;
+  Wishlist: undefined;
+  ConsoleDetails: { console: Console };
+};
+
 type ConsolesScreenProps = {
-  navigation: any; // Vamos usar 'any' por enquanto, mas o ideal seria tipar corretamente
+  navigation: BottomTabNavigationProp<MainTabParamList>;
 };
 
 const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
@@ -378,64 +388,63 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
   );
 
   const renderItem = ({ item }: { item: Console }) => (
-    <TouchableOpacity onPress={() => handleViewDetails(item)}>
-      <Card style={commonStyles.itemCard}>
-        {item.imageUrl ? (
-          <Card.Cover
-            source={{ uri: item.imageUrl }}
-            style={styles.cardCover}
-          />
-        ) : (
-          <View style={styles.placeholderCover}>
-            <Gamepad color={appColors.primary} size={32} />
-          </View>
-        )}
-        <Card.Content style={[commonStyles.itemCardContent, styles.contentPadding]}>
-          <View style={styles.cardHeader}>
-            <View>
-              <Text style={commonStyles.itemTitle}>{item.name}</Text>
-              <Text style={commonStyles.itemSubtitle}>{item.brand}</Text>
+    <View style={styles.cardContainer}>
+      <TouchableOpacity onPress={() => handleViewDetails(item)}>
+        <Card style={styles.fixedSizeCard}>
+          {item.imageUrl ? (
+            <Card.Cover
+              source={{ uri: item.imageUrl }}
+              style={styles.cardCover}
+            />
+          ) : (
+            <View style={styles.placeholderCover}>
+              <Gamepad color={appColors.primary} size={32} />
             </View>
-            <Menu
-              visible={menuVisible === item.id}
-              onDismiss={() => setMenuVisible(null)}
-              anchor={
-                <IconButton
-                  icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
-                  onPress={() => setMenuVisible(item.id)}
-                />
-              }
-            >
-              <Menu.Item 
-                onPress={() => {
-                  setMenuVisible(null);
-                  handleEditConsole(item);
-                }} 
-                title="Editar" 
-              />
-              <Menu.Item 
-                onPress={() => {
-                  setMenuVisible(null);
-                  confirmDelete(item.id);
-                }} 
-                title="Excluir"
-                titleStyle={{ color: appColors.destructive }}
-              />
-            </Menu>
-          </View>
-          <View style={styles.badgeContainer}>
-            <View style={commonStyles.badge}>
-              <Text style={commonStyles.badgeText}>{item.model}</Text>
-            </View>
-            {item.region && (
-              <View style={[commonStyles.badge, { marginLeft: 8 }]}>
-                <Text style={commonStyles.badgeText}>{item.region}</Text>
+          )}
+          <Card.Content style={styles.contentPadding}>
+            <View style={styles.cardHeader}>
+              <View style={styles.titleContainer}>
+                <Text style={[commonStyles.itemTitle, styles.cardTitle]} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
+                <Text style={[commonStyles.itemSubtitle, styles.cardSubtitle]} numberOfLines={1} ellipsizeMode="tail">{item.brand}</Text>
               </View>
-            )}
-          </View>
-        </Card.Content>
-      </Card>
-    </TouchableOpacity>
+              <Menu
+                visible={menuVisible === item.id}
+                onDismiss={() => setMenuVisible(null)}
+                anchor={
+                  <IconButton
+                    icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
+                    onPress={() => setMenuVisible(item.id)}
+                    size={20}
+                    style={styles.menuIcon}
+                  />
+                }
+              >
+                <Menu.Item 
+                  onPress={() => {
+                    setMenuVisible(null);
+                    handleEditConsole(item);
+                  }} 
+                  title="Editar" 
+                />
+                <Menu.Item 
+                  onPress={() => {
+                    setMenuVisible(null);
+                    confirmDelete(item.id);
+                  }} 
+                  title="Excluir"
+                  titleStyle={{ color: appColors.destructive }}
+                />
+              </Menu>
+            </View>
+            <View style={styles.badgeContainer}>
+              <View style={[commonStyles.badge, styles.smallBadge]}>
+                <Text style={[commonStyles.badgeText, styles.smallBadgeText]}>{item.model}</Text>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+      </TouchableOpacity>
+    </View>
   );
 
   const EmptyState = () => (
@@ -449,6 +458,20 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       </Text>
     </View>
   );
+
+  // Adicionar listener para o botão de menu na barra de navegação
+  useEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Home')}
+          style={{ marginLeft: 8 }}
+        >
+          <ChevronLeft color={theme.colors.onSurface} size={24} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, theme]);
 
   return (
     <View style={[commonStyles.container, { backgroundColor: theme.colors.background }]}>
@@ -509,6 +532,8 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
           visible={modalVisible}
           onDismiss={() => setModalVisible(false)}
           contentContainerStyle={commonStyles.modal}
+          dismissable={true}
+          dismissableBackButton={true}
         >
           <ScrollView>
             <Text style={commonStyles.modalTitle}>
@@ -523,6 +548,11 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
                 style={commonStyles.input}
                 mode="flat"
                 placeholder="Ex: PlayStation 5"
+                autoCapitalize="none"
+                autoCorrect={false}
+                blurOnSubmit={false}
+                selectionColor="#ffffff"
+                underlineColorAndroid="transparent"
               />
             </View>
 
@@ -739,27 +769,165 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
 
 const styles = StyleSheet.create({
   listContentContainer: {
-    paddingHorizontal: 12,
+    padding: 8,
   },
   columnWrapper: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    marginHorizontal: -8,
+    paddingHorizontal: 8,
   },
-  itemActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 12,
+  cardContainer: {
+    width: '48%',
+    marginHorizontal: 4,
+    marginBottom: 16,
   },
-  actionButton: {
-    margin: 0,
-    marginLeft: 8,
+  fixedSizeCard: {
+    flex: 0,
+    width: '100%',
+    overflow: 'hidden',
   },
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+  },
+  titleContainer: {
+    flex: 1,
+    marginRight: 4,
+    minHeight: 42,
+  },
+  cardTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    marginBottom: 4,
+    height: 36,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  cardCover: {
+    height: 140,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  placeholderCover: {
+    height: 140,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  contentPadding: {
+    paddingTop: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  infoContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  infoLabel: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  infoValue: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  maintenanceContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 12,
+  },
+  maintenanceLabel: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  maintenanceText: {
+    color: '#ffffff',
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 6,
+  },
+  maintenanceDate: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontStyle: 'italic',
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  searchContainer: {
+    flex: 1,
+  },
+  filterButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  filterButtonActive: {
+    backgroundColor: appColors.primary,
+    borderColor: 'transparent',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  filterBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  resetButton: {
+    color: appColors.primary,
+    fontSize: 14,
   },
   imageUploader: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -811,126 +979,17 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginBottom: 0,
   },
-  cardCover: {
-    height: 140,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  placeholderCover: {
-    height: 140,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  contentPadding: {
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 4,
-  },
-  infoContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
+  menuIcon: {
     padding: 8,
-    marginBottom: 12,
   },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 2,
-  },
-  infoLabel: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  infoValue: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  maintenanceContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 12,
-  },
-  maintenanceLabel: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  maintenanceText: {
-    color: '#ffffff',
-    fontSize: 12,
-    lineHeight: 16,
-    marginBottom: 6,
-  },
-  maintenanceDate: {
-    color: '#94a3b8',
-    fontSize: 10,
-    fontStyle: 'italic',
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    marginTop: 12,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  searchContainer: {
-    flex: 1,
-  },
-  filterButton: {
-    width: 48,
-    height: 48,
+  smallBadge: {
+    padding: 6,
+    paddingHorizontal: 10,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  filterButtonActive: {
-    backgroundColor: appColors.primary,
-    borderColor: 'transparent',
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  filterBadgeText: {
-    color: '#fff',
-    fontSize: 12,
+  smallBadgeText: {
+    fontSize: 11,
     fontWeight: '600',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  resetButton: {
-    color: appColors.primary,
-    fontSize: 14,
   },
 });
 

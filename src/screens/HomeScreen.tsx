@@ -259,8 +259,8 @@ const HomeScreen = () => {
                 <Text style={styles.statsNumber}>{stats.games + stats.consoles + stats.accessories}</Text>
                 <Text style={styles.statsLabel}>Total de Itens</Text>
               </View>
-              <View style={styles.statsCard}>
-                <Text style={styles.statsNumber}>{stats.wishlist}</Text>
+              <View style={[styles.statsCard, { backgroundColor: 'rgba(255, 87, 87, 0.1)' }]}>
+                <Text style={[styles.statsNumber, { color: '#ff5757' }]}>{stats.wishlist}</Text>
                 <Text style={styles.statsLabel}>Lista de Desejos</Text>
               </View>
             </View>

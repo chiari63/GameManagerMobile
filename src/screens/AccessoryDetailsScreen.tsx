@@ -1,11 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { Accessory, Console } from '../types';
 import { commonStyles } from '../theme/commonStyles';
-import { Calendar, Settings, Gamepad2 } from 'lucide-react-native';
+import { Calendar, Settings, Gamepad2, ChevronLeft } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { getConsoles } from '../services/storage';
+import type { StackNavigationProp } from '@react-navigation/stack';
+
+type RootStackParamList = {
+  AccessoriesStack: undefined;
+  AccessoryDetails: { accessory: Accessory };
+};
+
+type AccessoryDetailsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'AccessoryDetails'>;
 
 type AccessoryDetailsScreenProps = {
   route: {
@@ -13,9 +21,10 @@ type AccessoryDetailsScreenProps = {
       accessory: Accessory;
     };
   };
+  navigation: AccessoryDetailsScreenNavigationProp;
 };
 
-const AccessoryDetailsScreen = ({ route }: AccessoryDetailsScreenProps) => {
+const AccessoryDetailsScreen = ({ route, navigation }: AccessoryDetailsScreenProps) => {
   const { accessory } = route.params;
   const theme = useTheme();
   const [consoleName, setConsoleName] = useState<string>('');
@@ -36,6 +45,14 @@ const AccessoryDetailsScreen = ({ route }: AccessoryDetailsScreenProps) => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <ChevronLeft color={theme.colors.onSurface} size={24} />
+        </TouchableOpacity>
+      </View>
       {accessory.imageUrl ? (
         <View style={styles.imageContainer}>
           <Image source={{ uri: accessory.imageUrl }} style={styles.image} resizeMode="cover" />
@@ -98,6 +115,14 @@ const AccessoryDetailsScreen = ({ route }: AccessoryDetailsScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  backButton: {
+    padding: 8,
   },
   imageContainer: {
     width: '100%',

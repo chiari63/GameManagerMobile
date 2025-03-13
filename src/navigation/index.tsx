@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Text } from 'react-native';
 import { Gamepad, Disc3, Gamepad2, Heart, Home } from 'lucide-react-native';
 import { useTheme } from 'react-native-paper';
 import { Game, Console, Accessory } from '../types';
@@ -233,7 +233,16 @@ const MainNavigator = () => {
         component={WishlistScreen} 
         options={{
           title: 'Lista de Desejos',
-          tabBarIcon: ({ color, size }) => <Heart color={color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Heart color={color === theme.colors.primary ? '#ff5757' : color} size={size} />,
+          tabBarLabel: ({ color, focused }) => (
+            <Text style={{ 
+              color: focused ? '#ff5757' : color, 
+              fontSize: 10,
+              marginBottom: 2
+            }}>
+              Lista de Desejos
+            </Text>
+          ),
           headerShown: true,
           headerStyle: { backgroundColor: theme.colors.surface },
           headerTintColor: theme.colors.onSurface,
