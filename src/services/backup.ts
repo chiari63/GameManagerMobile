@@ -41,6 +41,21 @@ const STORAGE_KEY = '@GameManager:data';
 const imageToBase64 = async (uri: string): Promise<string | undefined> => {
   try {
     if (!uri) return undefined;
+    
+    // Verificar se é uma URL remota
+    if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      try {
+        // Para URLs remotas, vamos pular a conversão para base64
+        // e retornar undefined para evitar erros
+        console.log('Pulando conversão de URL remota:', uri);
+        return undefined;
+      } catch (error) {
+        console.error('Erro ao baixar imagem remota:', error);
+        return undefined;
+      }
+    }
+    
+    // Para arquivos locais, continua com a leitura normal
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
@@ -54,6 +69,9 @@ const imageToBase64 = async (uri: string): Promise<string | undefined> => {
 // Função para salvar imagem base64 no dispositivo
 const base64ToImage = async (base64: string, itemId: string = 'default'): Promise<string> => {
   try {
+    if (!FileSystem.documentDirectory) {
+      throw new Error('Diretório de documentos não disponível');
+    }
     // Usar o ID do item como parte do nome do arquivo para garantir unicidade
     const fileName = `${FileSystem.documentDirectory}${itemId}_${Date.now()}.jpg`;
     await FileSystem.writeAsStringAsync(fileName, base64, {
@@ -97,12 +115,16 @@ const processItemsWithImages = async (items: any[]): Promise<any[]> => {
 const restoreItemsWithImages = async (items: any[]): Promise<any[]> => {
   // Primeiro, limpar qualquer imagem antiga que possa estar no diretório
   try {
-    const files = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
-    const imageFiles = files.filter(file => file.endsWith('.jpg'));
-    
-    console.log(`Encontradas ${imageFiles.length} imagens antigas para limpar`);
-    
-    // Não vamos excluir as imagens antigas ainda, apenas registrar que existem
+    if (!FileSystem.documentDirectory) {
+      console.error('Diretório de documentos não disponível');
+    } else {
+      const files = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
+      const imageFiles = files.filter(file => file.endsWith('.jpg'));
+      
+      console.log(`Encontradas ${imageFiles.length} imagens antigas para limpar`);
+      
+      // Não vamos excluir as imagens antigas ainda, apenas registrar que existem
+    }
   } catch (error) {
     console.error('Erro ao listar diretório de imagens:', error);
   }
@@ -181,6 +203,9 @@ export const createBackup = async () => {
     const fileName = `gamemanager_backup_${date.getFullYear()}${(date.getMonth() + 1).toString().padStart(2, '0')}${date.getDate().toString().padStart(2, '0')}.json`;
 
     // Cria o arquivo de backup
+    if (!FileSystem.documentDirectory) {
+      throw new Error('Diretório de documentos não disponível');
+    }
     const fileUri = `${FileSystem.documentDirectory}${fileName}`;
     await FileSystem.writeAsStringAsync(fileUri, backupJson);
     console.log('Arquivo de backup criado:', fileUri);
@@ -209,6 +234,10 @@ export const restoreBackup = async () => {
 
     if (result.canceled) {
       throw new Error('Seleção de arquivo cancelada');
+    }
+
+    if (!result.assets || result.assets.length === 0 || !result.assets[0].uri) {
+      throw new Error('Arquivo de backup inválido ou não selecionado');
     }
 
     console.log('Arquivo de backup selecionado:', result.assets[0].uri);

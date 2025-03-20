@@ -10,6 +10,7 @@ import { LogBox, AppState, AppStateStatus, Platform, View, Text, Dimensions } fr
 import * as SplashScreen from 'expo-splash-screen';
 import Constants from 'expo-constants';
 import { AlertProvider } from './src/contexts/AlertContext';
+import { ValuesVisibilityProvider } from './src/contexts/ValuesVisibilityContext';
 
 // Log inicial do ambiente
 console.log('[App] Ambiente de execução:', {
@@ -162,10 +163,12 @@ export default function App() {
         <PaperProvider theme={darkTheme}>
           <SafeAreaProvider>
             <AlertProvider>
-              <View onLayout={onLayoutRootView} style={{ flex: 1 }}>
-                <Navigation />
-                <StatusBar style="light" />
-              </View>
+              <ValuesVisibilityProvider>
+                <View onLayout={onLayoutRootView} style={{ flex: 1 }}>
+                  <Navigation />
+                  <StatusBar style="light" />
+                </View>
+              </ValuesVisibilityProvider>
             </AlertProvider>
           </SafeAreaProvider>
         </PaperProvider>

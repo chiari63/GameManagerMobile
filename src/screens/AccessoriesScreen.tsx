@@ -3,7 +3,7 @@ import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image 
 import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Switch, useTheme } from 'react-native-paper';
 import { getAccessories, addAccessory, updateAccessory, deleteAccessory, getConsoles } from '../services/storage';
 import { Accessory, Console } from '../types';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal, ChevronLeft, Bell } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
@@ -14,18 +14,10 @@ import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
+import { MainTabParamList } from '../navigation/types';
 
 // Lista de tipos de acessórios disponíveis
 const TIPOS = ['Controles', 'Cabos', 'Memorycards', 'Outros'];
-
-type MainTabParamList = {
-  Home: undefined;
-  Games: undefined;
-  ConsolesStack: undefined;
-  AccessoriesStack: undefined;
-  Wishlist: undefined;
-  AccessoryDetails: { accessory: Accessory };
-};
 
 type AccessoriesScreenProps = {
   navigation: BottomTabNavigationProp<MainTabParamList>;
@@ -50,6 +42,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
     consoleId: '',
   });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  const [condicaoMenuVisible, setCondicaoMenuVisible] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -61,6 +54,8 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
     maintenanceInterval: 6, // Valor padrão: 6 meses
     notifyMaintenance: true, // Ativar notificações por padrão
     imageUrl: '',
+    condition: '',
+    pricePaid: '',
   });
 
   const loadAccessories = async () => {
@@ -123,7 +118,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
     };
   }, []);
 
-  // Adicionar listener para o botão de voltar na barra de navegação
+  // Adicionar listener para o botão de menu na barra de navegação
   useEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
@@ -158,6 +153,8 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
         maintenanceInterval: formData.maintenanceInterval,
         notifyMaintenance: formData.notifyMaintenance,
         imageUrl: formData.imageUrl,
+        condition: formData.condition,
+        pricePaid: formData.pricePaid ? parseFloat(formData.pricePaid) : undefined,
       };
 
       if (editingAccessory) {
@@ -203,6 +200,8 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       maintenanceInterval: accessory.maintenanceInterval || 6,
       notifyMaintenance: accessory.notifyMaintenance !== undefined ? accessory.notifyMaintenance : true,
       imageUrl: accessory.imageUrl || '',
+      condition: accessory.condition || '',
+      pricePaid: accessory.pricePaid ? accessory.pricePaid.toString() : '',
     });
     setModalVisible(true);
     setMenuVisible(null);
@@ -250,6 +249,8 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       maintenanceInterval: 6,
       notifyMaintenance: true,
       imageUrl: '',
+      condition: '',
+      pricePaid: '',
     });
   };
 
@@ -595,6 +596,54 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
                   />
                 ))}
               </Menu>
+            </View>
+
+            <View style={commonStyles.formGroup}>
+              <Text style={commonStyles.label}>Condição</Text>
+              <Menu
+                visible={condicaoMenuVisible}
+                onDismiss={() => setCondicaoMenuVisible(false)}
+                anchor={
+                  <TouchableOpacity
+                    onPress={() => setCondicaoMenuVisible(true)}
+                    style={[commonStyles.input, styles.menuButton]}
+                  >
+                    <Text style={{ color: theme.colors.onSurface }}>
+                      {formData.condition || 'Selecione a condição'}
+                    </Text>
+                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                  </TouchableOpacity>
+                }
+              >
+                {['Novo', 'Como novo', 'Bom', 'Regular', 'Ruim'].map((condition) => (
+                  <Menu.Item
+                    key={condition}
+                    onPress={() => {
+                      setFormData({ ...formData, condition });
+                      setCondicaoMenuVisible(false);
+                    }}
+                    title={condition}
+                  />
+                ))}
+              </Menu>
+            </View>
+
+            <View style={commonStyles.formGroup}>
+              <Text style={commonStyles.label}>Preço Pago (R$)</Text>
+              <TextInput
+                value={formData.pricePaid}
+                onChangeText={(text) => {
+                  // Permitir apenas números e ponto decimal
+                  const sanitizedText = text.replace(/[^0-9.]/g, '');
+                  setFormData({ ...formData, pricePaid: sanitizedText });
+                }}
+                style={commonStyles.input}
+                mode="flat"
+                placeholder="Ex: 299.90"
+                keyboardType="numeric"
+                selectionColor="#ffffff"
+                underlineColorAndroid="transparent"
+              />
             </View>
 
             <View style={commonStyles.formGroup}>

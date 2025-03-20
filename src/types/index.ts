@@ -8,6 +8,8 @@ export interface Game {
   purchaseDate: string;
   isPhysical: boolean;
   imageUrl?: string;
+  igdbId?: number;
+  pricePaid?: number;
 }
 
 export interface Console {
@@ -23,6 +25,8 @@ export interface Console {
   notifyMaintenance?: boolean;
   nextMaintenanceDate?: string;
   imageUrl?: string;
+  condition?: string;
+  pricePaid?: number;
 }
 
 export interface Accessory {
@@ -37,6 +41,8 @@ export interface Accessory {
   notifyMaintenance?: boolean;
   nextMaintenanceDate?: string;
   imageUrl?: string;
+  condition?: string;
+  pricePaid?: number;
 }
 
 export interface WishlistItem {

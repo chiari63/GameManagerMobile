@@ -3,8 +3,8 @@ import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Image } from 
 import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
 import { getGames, addGame, updateGame, deleteGame, getConsoles } from '../services/storage';
 import { Game, Console } from '../types';
-import { useFocusEffect } from '@react-navigation/native';
-import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell } from 'lucide-react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell, Search } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
@@ -14,21 +14,14 @@ import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
+import IGDBGameSearchModal from '../components/IGDBGameSearchModal';
+import { MainTabParamList } from '../navigation/types';
 
 // Lista de regiões disponíveis
-const REGIOES = ['Americano', 'Japonês'];
+const REGIOES = ['Americano', 'Japonês', 'Brasileiro'];
 
 // Lista de gêneros disponíveis
 const GENEROS = ['Ação', 'Aventura', 'RPG', 'Estratégia', 'Esporte', 'Corrida', 'Luta', 'Plataforma', 'Outros'];
-
-type MainTabParamList = {
-  Home: undefined;
-  Games: undefined;
-  ConsolesStack: undefined;
-  AccessoriesStack: undefined;
-  Wishlist: undefined;
-  GameDetails: { game: Game };
-};
 
 type GamesScreenProps = {
   navigation: BottomTabNavigationProp<MainTabParamList>;
@@ -55,6 +48,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
   });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
   const [filterConsoleMenuVisible, setFilterConsoleMenuVisible] = useState(false);
+  const [igdbSearchModalVisible, setIgdbSearchModalVisible] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -65,6 +59,8 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
     purchaseDate: '',
     isPhysical: true,
     imageUrl: '',
+    igdbId: undefined as number | undefined,
+    pricePaid: '',
   });
 
   const loadData = async () => {
@@ -169,15 +165,21 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
     }
 
     try {
+      // Converter o preço de string para number
+      const gameData = {
+        ...formData,
+        pricePaid: formData.pricePaid ? parseFloat(formData.pricePaid) : undefined
+      };
+
       if (editingGame) {
-        await updateGame(editingGame.id, formData);
+        await updateGame(editingGame.id, gameData);
         showAlert({
           title: 'Sucesso',
           message: 'Jogo atualizado com sucesso!',
           buttons: [{ text: 'OK', onPress: () => {} }]
         });
       } else {
-        await addGame(formData);
+        await addGame(gameData);
         showAlert({
           title: 'Sucesso',
           message: 'Jogo adicionado com sucesso!',
@@ -210,6 +212,8 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       purchaseDate: game.purchaseDate,
       isPhysical: game.isPhysical,
       imageUrl: game.imageUrl || '',
+      igdbId: game.igdbId,
+      pricePaid: game.pricePaid ? game.pricePaid.toString() : '',
     });
     setModalVisible(true);
     setMenuVisible(null);
@@ -256,6 +260,8 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       purchaseDate: '',
       isPhysical: true,
       imageUrl: '',
+      igdbId: undefined as number | undefined,
+      pricePaid: '',
     });
   };
 
@@ -507,6 +513,22 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
     </View>
   );
 
+  // Função para lidar com a seleção de um jogo da API IGDB
+  const handleIGDBGameSelect = (gameData: any) => {
+    console.log('Dados recebidos da busca IGDB:', gameData);
+    
+    setFormData({
+      ...formData,
+      name: gameData.name || formData.name,
+      genre: gameData.genre || formData.genre,
+      releaseYear: gameData.releaseYear || formData.releaseYear,
+      imageUrl: gameData.imageUrl || formData.imageUrl,
+      igdbId: gameData.igdbId,
+    });
+    
+    console.log('FormData atualizado com ID IGDB:', formData);
+  };
+
   return (
     <View style={[commonStyles.container, { backgroundColor: theme.colors.background }]}>
       <View style={commonStyles.header}>
@@ -588,6 +610,21 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
                 selectionColor="#ffffff"
                 underlineColorAndroid="transparent"
               />
+            </View>
+
+            <View style={commonStyles.formGroup}>
+              <Button
+                mode="outlined"
+                icon={() => <Search size={18} color={appColors.primary} />}
+                onPress={() => setIgdbSearchModalVisible(true)}
+                style={[styles.igdbButton, { borderColor: appColors.primary, borderWidth: 1.5 }]}
+                labelStyle={{ color: appColors.primary, fontWeight: 'bold' }}
+              >
+                Buscar jogo na IGDB
+              </Button>
+              <Text style={styles.igdbHelpText}>
+                Preencha automaticamente os dados do jogo buscando na base IGDB
+              </Text>
             </View>
 
             <View style={commonStyles.formGroup}>
@@ -693,7 +730,6 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
             </View>
 
             <View style={commonStyles.formGroup}>
-
               <DatePicker
                 label="Data de Compra"
                 value={formData.purchaseDate}
@@ -708,6 +744,24 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
                 value={formData.isPhysical}
                 onValueChange={(value) => setFormData({ ...formData, isPhysical: value })}
                 color={appColors.primary}
+              />
+            </View>
+
+            <View style={commonStyles.formGroup}>
+              <Text style={commonStyles.label}>Preço Pago (R$)</Text>
+              <TextInput
+                value={formData.pricePaid}
+                onChangeText={(text) => {
+                  // Permitir apenas números e ponto decimal
+                  const sanitizedText = text.replace(/[^0-9.]/g, '');
+                  setFormData({ ...formData, pricePaid: sanitizedText });
+                }}
+                style={commonStyles.input}
+                mode="flat"
+                placeholder="Ex: 299.90"
+                keyboardType="numeric"
+                selectionColor="#ffffff"
+                underlineColorAndroid="transparent"
               />
             </View>
 
@@ -802,6 +856,13 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
           </ScrollView>
         </Modal>
       </Portal>
+
+      {/* Modal de busca na API IGDB */}
+      <IGDBGameSearchModal
+        visible={igdbSearchModalVisible}
+        onClose={() => setIgdbSearchModalVisible(false)}
+        onSelect={handleIGDBGameSelect}
+      />
 
       {renderFilterModal()}
     </View>
@@ -993,6 +1054,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 8,
+  },
+  igdbButton: {
+    marginVertical: 8,
+    borderColor: appColors.primary,
+    height: 48,
+    justifyContent: 'center',
+  },
+  igdbHelpText: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    marginLeft: 4,
   },
 });
 

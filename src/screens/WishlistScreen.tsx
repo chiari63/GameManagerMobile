@@ -9,15 +9,8 @@ import { commonStyles } from '../theme/commonStyles';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { MainTabParamList } from '../navigation/types';
 import { useAlert } from '../contexts/AlertContext';
-
-type MainTabParamList = {
-  Home: undefined;
-  Games: undefined;
-  ConsolesStack: undefined;
-  AccessoriesStack: undefined;
-  Wishlist: undefined;
-};
 
 type WishlistScreenNavigationProp = BottomTabNavigationProp<MainTabParamList>;
 

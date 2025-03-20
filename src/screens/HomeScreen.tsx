@@ -2,17 +2,20 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions, TouchableWithoutFeedback, Alert, RefreshControl } from 'react-native';
 import { Text, Card, useTheme, IconButton, Button } from 'react-native-paper';
 import { getGames, getConsoles, getAccessories, getWishlistItems } from '../services/storage';
-import { Gamepad, Disc3, Gamepad2, Heart, Menu as MenuIcon, X, Settings, Save, Upload, RefreshCw, Wrench } from 'lucide-react-native';
+import { Gamepad, Disc3, Gamepad2, Heart, Menu as MenuIcon, X, Settings, Save, Upload, RefreshCw, Wrench, Eye } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { appColors } from '../theme';
 import { appConfig } from '../config/app';
 import { createBackup, restoreBackup, backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import NotificationIcon from '../components/NotificationIcon';
+import ApiStatusIcon from '../components/ApiStatusIcon';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAlert } from '../contexts/AlertContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.7;
@@ -40,6 +43,7 @@ const HomeScreen = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const theme = useTheme();
   const { showAlert } = useAlert();
+  const { showValues, toggleValuesVisibility } = useValuesVisibility();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
@@ -47,6 +51,10 @@ const HomeScreen = () => {
     consoles: 0,
     accessories: 0,
     wishlist: 0,
+    totalInvested: 0,
+    totalInvestedAccessories: 0,
+    totalInvestedGames: 0,
+    totalEstimatedWishlist: 0,
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerAnimation = useRef(new Animated.Value(0)).current;
@@ -62,7 +70,10 @@ const HomeScreen = () => {
         />
       ),
       headerRight: () => (
-        <NotificationIcon size={24} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
+          <ApiStatusIcon size={20} />
+          <NotificationIcon size={24} />
+        </View>
       ),
     });
   }, [navigation, theme]);
@@ -87,6 +98,9 @@ const HomeScreen = () => {
       setIsLoading(false);
     });
 
+    // Adicionar log para verificar o valor de totalInvestedAccessories
+    console.log('[HomeScreen] Total investido em acessórios:', stats.totalInvestedAccessories);
+
     return () => {
       console.log('[HomeScreen] Componente desmontado');
     };
@@ -103,11 +117,44 @@ const HomeScreen = () => {
         getWishlistItems(),
       ]);
 
+      // Adicionar log para verificar os acessórios e seus preços
+      console.log('[HomeScreen] Acessórios carregados:', accessories.map(a => ({ id: a.id, name: a.name, pricePaid: a.pricePaid })));
+
+      // Calcular o total investido em consoles
+      const totalInvested = consoles.reduce((total, console) => {
+        return total + (console.pricePaid || 0);
+      }, 0);
+
+      // Calcular o total investido em acessórios
+      const totalInvestedAccessories = accessories.reduce((total, accessory) => {
+        return total + (accessory.pricePaid || 0);
+      }, 0);
+
+      // Calcular o total investido em jogos
+      const totalInvestedGames = games.reduce((total, game) => {
+        return total + (game.pricePaid || 0);
+      }, 0);
+
+      // Calcular o total estimado da lista de desejos
+      const totalEstimatedWishlist = wishlist.reduce((total, item) => {
+        return total + (item.estimatedPrice || 0);
+      }, 0);
+
+      // Adicionar log para verificar o valor calculado
+      console.log('[HomeScreen] Total investido em acessórios (calculado):', totalInvestedAccessories);
+      console.log('[HomeScreen] Total investido em jogos (calculado):', totalInvestedGames);
+      console.log('[HomeScreen] Total estimado da lista de desejos (calculado):', totalEstimatedWishlist);
+      console.log('[HomeScreen] Total de itens cadastrados:', games.length + consoles.length + accessories.length);
+
       console.log('[HomeScreen] Dados carregados:', {
         games: games.length,
         consoles: consoles.length,
         accessories: accessories.length,
         wishlist: wishlist.length,
+        totalInvested,
+        totalInvestedAccessories,
+        totalInvestedGames,
+        totalEstimatedWishlist,
       });
 
       setStats({
@@ -115,6 +162,10 @@ const HomeScreen = () => {
         consoles: consoles.length,
         accessories: accessories.length,
         wishlist: wishlist.length,
+        totalInvested,
+        totalInvestedAccessories,
+        totalInvestedGames,
+        totalEstimatedWishlist,
       });
     } catch (error) {
       console.error('[HomeScreen] Erro ao carregar estatísticas:', error);
@@ -203,26 +254,38 @@ const HomeScreen = () => {
   const renderDrawer = () => {
     return (
       <>
-        {drawerOpen && (
-          <TouchableWithoutFeedback onPress={toggleDrawer}>
-            <View style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.5)' }]} />
-          </TouchableWithoutFeedback>
-        )}
-        <Animated.View 
+        <TouchableWithoutFeedback onPress={toggleDrawer}>
+          <Animated.View
+            style={[
+              styles.backdrop,
+              {
+                display: drawerOpen ? 'flex' : 'none',
+              },
+            ]}
+          />
+        </TouchableWithoutFeedback>
+        <Animated.View
           style={[
-            styles.drawer, 
-            { 
-              transform: [{ translateX }],
+            styles.drawer,
+            {
+              transform: [
+                {
+                  translateX: drawerAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-300, 0],
+                  }),
+                },
+              ],
               backgroundColor: theme.colors.surface,
-            }
+            },
           ]}
         >
-          <View style={[styles.drawerHeader, { borderBottomColor: 'rgba(255, 255, 255, 0.05)' }]}>
-            <Text style={[styles.drawerTitle, { color: theme.colors.onSurface }]}>Menu</Text>
+          <View style={styles.drawerHeader}>
+            <Text style={styles.drawerTitle}>Game Manager</Text>
             <IconButton
-              icon={() => <X color={theme.colors.onSurface} size={20} />}
+              icon={() => <X color={theme.colors.onSurface} size={24} />}
               onPress={toggleDrawer}
-              style={styles.closeButton}
+              style={{ margin: 0 }}
             />
           </View>
           <View style={styles.drawerContent}>
@@ -273,6 +336,26 @@ const HomeScreen = () => {
                 </Text>
               </View>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.drawerItem}
+              onPress={() => {
+                toggleValuesVisibility();
+                toggleDrawer();
+              }}
+            >
+              <View style={styles.drawerItemIcon}>
+                <Eye color={theme.colors.onSurfaceVariant} size={20} />
+              </View>
+              <View style={styles.drawerItemContent}>
+                <Text style={styles.drawerItemTitle}>
+                  {showValues ? 'Ocultar Valores' : 'Mostrar Valores'}
+                </Text>
+                <Text style={styles.drawerItemDescription}>
+                  {showValues ? 'Esconder informações de preço' : 'Exibir informações de preço'}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
           <View style={styles.drawerFooter}>
             <Text style={styles.versionText}>
@@ -320,13 +403,16 @@ const HomeScreen = () => {
             </View>
 
             <View style={styles.statsContainer}>
-              <View style={styles.statsCard}>
-                <Text style={styles.statsNumber}>{stats.games + stats.consoles + stats.accessories}</Text>
-                <Text style={styles.statsLabel}>Total de Itens</Text>
-              </View>
-              <View style={[styles.statsCard, { backgroundColor: 'rgba(255, 87, 87, 0.1)' }]}>
-                <Text style={[styles.statsNumber, { color: '#ff5757' }]}>{stats.wishlist}</Text>
-                <Text style={styles.statsLabel}>Lista de Desejos</Text>
+              <View style={[styles.statsCard, { backgroundColor: 'rgba(74, 155, 255, 0.15)' }]}>
+                <Text style={[styles.statsNumber, { color: appColors.primary, fontSize: 38 }]}>{stats.games + stats.consoles + stats.accessories}</Text>
+                <Text style={[styles.statsLabel, { fontSize: 16, marginBottom: 8 }]}>Total de Itens Cadastrados</Text>
+                <View style={[styles.investmentContainer, { backgroundColor: 'rgba(74, 155, 255, 0.2)', width: '100%', paddingVertical: 8 }]}>
+                  <Text style={[styles.investmentText, { fontSize: 14 }]}>
+                    Total investido: {showValues ? 
+                      `R$ ${(stats.totalInvested + stats.totalInvestedAccessories + stats.totalInvestedGames).toFixed(2)}` : 
+                      'R$ ******'}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -357,6 +443,11 @@ const HomeScreen = () => {
                     <Text style={styles.categoryDescription}>
                       Gerenciar sua coleção de consoles
                     </Text>
+                    <View style={styles.investmentContainer}>
+                      <Text style={styles.investmentText}>
+                        Total investido: {showValues ? `R$ ${stats.totalInvested.toFixed(2)}` : 'R$ ******'}
+                      </Text>
+                    </View>
                   </Card.Content>
                 </Card>
               </TouchableOpacity>
@@ -387,6 +478,11 @@ const HomeScreen = () => {
                     <Text style={styles.categoryDescription}>
                       Organizar seus acessórios e controles
                     </Text>
+                    <View style={styles.investmentContainer}>
+                      <Text style={styles.investmentText}>
+                        Total investido: {showValues ? `R$ ${stats.totalInvestedAccessories.toFixed(2)}` : 'R$ ******'}
+                      </Text>
+                    </View>
                   </Card.Content>
                 </Card>
               </TouchableOpacity>
@@ -417,6 +513,11 @@ const HomeScreen = () => {
                     <Text style={styles.categoryDescription}>
                       Catalogar sua biblioteca de jogos
                     </Text>
+                    <View style={styles.investmentContainer}>
+                      <Text style={styles.investmentText}>
+                        Total investido: {showValues ? `R$ ${stats.totalInvestedGames.toFixed(2)}` : 'R$ ******'}
+                      </Text>
+                    </View>
                   </Card.Content>
                 </Card>
               </TouchableOpacity>
@@ -447,6 +548,11 @@ const HomeScreen = () => {
                     <Text style={styles.categoryDescription}>
                       Itens que você deseja adquirir
                     </Text>
+                    <View style={[styles.investmentContainer, { backgroundColor: 'rgba(255, 87, 87, 0.1)' }]}>
+                      <Text style={[styles.investmentText, { color: '#ff5757' }]}>
+                        Total estimado: {showValues ? `R$ ${stats.totalEstimatedWishlist.toFixed(2)}` : 'R$ ******'}
+                      </Text>
+                    </View>
                   </Card.Content>
                 </Card>
               </TouchableOpacity>
@@ -476,26 +582,31 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
     paddingHorizontal: 24,
     marginBottom: 32,
   },
   statsCard: {
     alignItems: 'center',
-    backgroundColor: 'rgba(74, 155, 255, 0.1)',
-    padding: 16,
     borderRadius: 16,
-    minWidth: 140,
+    padding: 20,
+    paddingHorizontal: 60,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   statsNumber: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#4a9bff',
     marginBottom: 4,
+    color: '#ffffff',
   },
   statsLabel: {
     fontSize: 14,
     color: '#94a3b8',
+    textAlign: 'center',
   },
   categoriesContainer: {
     padding: 24,
@@ -559,6 +670,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     borderBottomRightRadius: 24,
     overflow: 'hidden',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
   overlay: {
     position: 'absolute',
@@ -575,10 +691,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 20,
     borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   drawerTitle: {
     fontSize: 22,
     fontWeight: '600',
+    color: '#ffffff',
   },
   closeButton: {
     margin: 0,
@@ -647,6 +765,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#94a3b8',
     opacity: 0.8,
+  },
+  investmentContainer: {
+    marginTop: 8,
+    backgroundColor: 'rgba(74, 155, 255, 0.1)',
+    borderRadius: 8,
+    padding: 6,
+  },
+  investmentText: {
+    fontSize: 12,
+    color: appColors.primary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 998,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
 });
 

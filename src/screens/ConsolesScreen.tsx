@@ -3,8 +3,8 @@ import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Image, Platfo
 import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
 import { getConsoles, addConsole, updateConsole, deleteConsole } from '../services/storage';
 import { Console } from '../types';
-import { useFocusEffect } from '@react-navigation/native';
-import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell } from 'lucide-react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell, Search } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
@@ -14,24 +14,17 @@ import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
+import IGDBConsoleSearchModal from '../components/IGDBConsoleSearchModal';
+import { MainTabParamList } from '../navigation/types';
 
 // Lista de fabricantes disponíveis
-const FABRICANTES = ['Sony', 'Microsoft', 'Nintendo', 'Sega', 'Tectoy', 'Outros'];
+const FABRICANTES = ['Sony', 'Microsoft', 'Nintendo', 'Sega', 'Tectoy', 'Atari', 'Outros'];
 
 // Lista de modelos disponíveis
 const MODELOS = ['Fat', 'Slim', 'Super Slim', 'Pró', 'Meio de geração'];
 
 // Lista de regiões disponíveis
-const REGIOES = ['Americano', 'Japonês'];
-
-type MainTabParamList = {
-  Home: undefined;
-  Games: undefined;
-  ConsolesStack: undefined;
-  AccessoriesStack: undefined;
-  Wishlist: undefined;
-  ConsoleDetails: { console: Console };
-};
+const REGIOES = ['Americano', 'Japonês', 'Brasileiro'];
 
 type ConsolesScreenProps = {
   navigation: BottomTabNavigationProp<MainTabParamList>;
@@ -57,6 +50,8 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
     region: '',
   });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  const [igdbSearchModalVisible, setIgdbSearchModalVisible] = useState(false);
+  const [conditionMenuVisible, setConditionMenuVisible] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -69,6 +64,8 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
     maintenanceInterval: 6, // Valor padrão: 6 meses
     notifyMaintenance: true, // Ativar notificações por padrão
     imageUrl: '',
+    condition: '',
+    pricePaid: '',
   });
 
   // Função para validar formato de data (DD/MM/YYYY)
@@ -166,15 +163,21 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
     }
 
     try {
+      // Converter o preço de string para number
+      const consoleData = {
+        ...formData,
+        pricePaid: formData.pricePaid ? parseFloat(formData.pricePaid) : undefined
+      };
+
       if (editingConsole) {
-        await updateConsole(editingConsole.id, formData);
+        await updateConsole(editingConsole.id, consoleData);
         showAlert({
           title: 'Sucesso',
           message: 'Console atualizado com sucesso!',
           buttons: [{ text: 'OK', onPress: () => {} }]
         });
       } else {
-        await addConsole(formData);
+        await addConsole(consoleData);
         showAlert({
           title: 'Sucesso',
           message: 'Console adicionado com sucesso!',
@@ -209,6 +212,8 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       maintenanceInterval: console.maintenanceInterval || 6,
       notifyMaintenance: console.notifyMaintenance !== undefined ? console.notifyMaintenance : true,
       imageUrl: console.imageUrl || '',
+      condition: console.condition || '',
+      pricePaid: console.pricePaid ? console.pricePaid.toString() : '',
     });
     setModalVisible(true);
     setMenuVisible(null);
@@ -257,6 +262,8 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       maintenanceInterval: 6,
       notifyMaintenance: true,
       imageUrl: '',
+      condition: '',
+      pricePaid: '',
     });
   };
 
@@ -523,6 +530,16 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
     });
   }, [navigation, theme]);
 
+  // Função para lidar com a seleção de um console da API IGDB
+  const handleIGDBConsoleSelect = (platformData: any) => {
+    setFormData({
+      ...formData,
+      name: platformData.name || formData.name,
+      brand: platformData.brand || formData.brand,
+      imageUrl: platformData.imageUrl || formData.imageUrl,
+    });
+  };
+
   return (
     <View style={[commonStyles.container, { backgroundColor: theme.colors.background }]}>
       <View style={commonStyles.header}>
@@ -597,13 +614,24 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
                 onChangeText={(text) => setFormData({ ...formData, name: text })}
                 style={commonStyles.input}
                 mode="flat"
-                placeholder="Ex: PlayStation 5"
-                autoCapitalize="none"
-                autoCorrect={false}
-                blurOnSubmit={false}
-                selectionColor="#ffffff"
-                underlineColorAndroid="transparent"
+                placeholder="Digite o nome do console"
+                placeholderTextColor={theme.colors.onSurfaceVariant}
               />
+            </View>
+
+            <View style={commonStyles.formGroup}>
+              <Button
+                mode="outlined"
+                icon={() => <Search size={18} color={appColors.primary} />}
+                onPress={() => setIgdbSearchModalVisible(true)}
+                style={[styles.igdbButton, { borderColor: appColors.primary, borderWidth: 1.5 }]}
+                labelStyle={{ color: appColors.primary, fontWeight: 'bold' }}
+              >
+                Buscar console na IGDB
+              </Button>
+              <Text style={styles.igdbHelpText}>
+                Preencha automaticamente os dados do console buscando na base IGDB
+              </Text>
             </View>
 
             <View style={commonStyles.formGroup}>
@@ -694,6 +722,53 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
                   />
                 ))}
               </Menu>
+            </View>
+
+            <View style={commonStyles.formGroup}>
+              <Text style={commonStyles.label}>Condição</Text>
+              <Menu
+                visible={conditionMenuVisible}
+                onDismiss={() => setConditionMenuVisible(false)}
+                anchor={
+                  <TouchableOpacity
+                    onPress={() => setConditionMenuVisible(true)}
+                    style={[commonStyles.input, styles.menuButton]}
+                  >
+                    <Text style={{ color: theme.colors.onSurface }}>
+                      {formData.condition || 'Selecione a condição'}
+                    </Text>
+                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                  </TouchableOpacity>
+                }
+              >
+                {['Novo', 'Como novo', 'Bom estado', 'Regular', 'Precisa de reparos'].map((condition) => (
+                  <Menu.Item
+                    key={condition}
+                    onPress={() => {
+                      setFormData({ ...formData, condition });
+                      setConditionMenuVisible(false);
+                    }}
+                    title={condition}
+                  />
+                ))}
+              </Menu>
+            </View>
+
+            <View style={commonStyles.formGroup}>
+              <Text style={commonStyles.label}>Preço Pago (R$)</Text>
+              <TextInput
+                value={formData.pricePaid}
+                onChangeText={(text) => {
+                  // Permitir apenas números e ponto decimal
+                  const cleanedText = text.replace(/[^0-9.]/g, '');
+                  setFormData({ ...formData, pricePaid: cleanedText });
+                }}
+                style={commonStyles.input}
+                mode="flat"
+                placeholder="0.00"
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+                keyboardType="numeric"
+              />
             </View>
 
             <View style={commonStyles.formGroup}>
@@ -871,6 +946,14 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
           </ScrollView>
         </Modal>
       </Portal>
+
+      {/* Modal de busca na API IGDB */}
+      <IGDBConsoleSearchModal
+        visible={igdbSearchModalVisible}
+        onClose={() => setIgdbSearchModalVisible(false)}
+        onSelect={handleIGDBConsoleSelect}
+      />
+
       {renderFilterModal()}
     </View>
   );
@@ -1098,7 +1181,6 @@ const styles = StyleSheet.create({
   },
   smallBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
   },
   intervalContainer: {
     flexDirection: 'row',
@@ -1136,6 +1218,18 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14,
     fontWeight: '600',
+  },
+  igdbButton: {
+    marginVertical: 8,
+    borderColor: appColors.primary,
+    height: 48,
+    justifyContent: 'center',
+  },
+  igdbHelpText: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    marginLeft: 4,
   },
 });
 
