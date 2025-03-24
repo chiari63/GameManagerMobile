@@ -24,6 +24,7 @@ export type RootStackParamList = {
   AccessoryDetails: { id: string };
   Maintenance: undefined;
   Notifications: undefined;
+  ApiConfig: undefined;
   IGDBSearch: { 
     onSelect: (data: any) => void;
     searchType: 'game' | 'platform';

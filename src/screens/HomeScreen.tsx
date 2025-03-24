@@ -32,6 +32,7 @@ type RootStackParamList = {
   MainTabs: undefined;
   Maintenance: undefined;
   Notifications: undefined;
+  ApiConfig: undefined;
 };
 
 type HomeScreenNavigationProp = CompositeNavigationProp<
@@ -353,6 +354,24 @@ const HomeScreen = () => {
                 </Text>
                 <Text style={styles.drawerItemDescription}>
                   {showValues ? 'Esconder informações de preço' : 'Exibir informações de preço'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.drawerItem}
+              onPress={() => {
+                navigation.navigate('ApiConfig');
+                toggleDrawer();
+              }}
+            >
+              <View style={styles.drawerItemIcon}>
+                <Settings color={theme.colors.onSurfaceVariant} size={20} />
+              </View>
+              <View style={styles.drawerItemContent}>
+                <Text style={styles.drawerItemTitle}>Configurar API</Text>
+                <Text style={styles.drawerItemDescription}>
+                  Gerenciar credenciais da API IGDB
                 </Text>
               </View>
             </TouchableOpacity>

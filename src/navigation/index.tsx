@@ -26,6 +26,7 @@ import {
   MaintenanceScreen,
   NotificationsScreen,
   IGDBSearchScreen,
+  ApiConfigScreen,
 } from '../screens';
 
 // Tema de navegação
@@ -274,6 +275,7 @@ const AppNavigator = () => {
         <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Manutenções' }} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notificações' }} />
         <Stack.Screen name="IGDBSearch" component={IGDBSearchScreen} options={{ title: 'Buscar na IGDB' }} />
+        <Stack.Screen name="ApiConfig" component={ApiConfigScreen} options={{ title: 'Configurar API' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

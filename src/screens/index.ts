@@ -8,4 +8,5 @@ export { default as AccessoryDetailsScreen } from './AccessoryDetailsScreen';
 export { default as WishlistScreen } from './WishlistScreen';
 export { default as MaintenanceScreen } from './MaintenanceScreen';
 export { default as NotificationsScreen } from './NotificationsScreen';
-export { default as IGDBSearchScreen } from './IGDBSearchScreen'; 
+export { default as IGDBSearchScreen } from './IGDBSearchScreen';
+export { default as ApiConfigScreen } from './ApiConfigScreen'; 

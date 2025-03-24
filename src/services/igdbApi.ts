@@ -2,6 +2,9 @@ import axios from 'axios';
 import { getIGDBToken, clearIGDBToken } from './igdbAuth';
 import { igdbConfig } from '../config/igdbConfig';
 import { cacheData, getCachedData } from './cacheService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../constants/storage';
+import { appLog } from '../config/environment';
 
 /**
  * Função para codificar uma string em base64 (compatível com React Native)
@@ -12,7 +15,7 @@ const encodeToBase64 = (str: string): string => {
   try {
     return btoa(unescape(encodeURIComponent(str)));
   } catch (error) {
-    console.error('Erro ao codificar para base64:', error);
+    appLog.error('Erro ao codificar para base64:', error);
     // Fallback: usar um hash simples se btoa falhar
     return str.split('').reduce((a, b) => {
       a = ((a << 5) - a) + b.charCodeAt(0);
@@ -27,6 +30,9 @@ const encodeToBase64 = (str: string): string => {
  */
 export const checkIGDBConnection = async (): Promise<{ connected: boolean; message: string }> => {
   try {
+    // Obter credenciais configuradas pelo usuário
+    const clientId = await AsyncStorage.getItem(STORAGE_KEYS.IGDB_CLIENT_ID) || igdbConfig.clientId;
+    
     // Tentar obter um token para verificar a conexão
     const token = await getIGDBToken();
     
@@ -36,7 +42,7 @@ export const checkIGDBConnection = async (): Promise<{ connected: boolean; messa
       method: 'POST',
       headers: {
         'Accept': 'application/json',
-        'Client-ID': igdbConfig.clientId,
+        'Client-ID': clientId,
         'Authorization': `Bearer ${token}`
       },
       data: 'fields name; limit 1;'
@@ -54,7 +60,7 @@ export const checkIGDBConnection = async (): Promise<{ connected: boolean; messa
       };
     }
   } catch (error) {
-    console.error('Erro ao verificar conexão com a API IGDB:', error);
+    appLog.error('Erro ao verificar conexão com a API IGDB:', error);
     let errorMessage = 'Falha na conexão com a API IGDB';
     
     if (axios.isAxiosError(error)) {
@@ -79,64 +85,67 @@ export const checkIGDBConnection = async (): Promise<{ connected: boolean; messa
  * @returns Dados retornados pela API
  */
 export const queryIGDB = async (endpoint: string, query: string, useCache = true): Promise<any> => {
-  console.log(`queryIGDB - Iniciando consulta para ${endpoint}`);
-  console.log(`queryIGDB - Query: ${query}`);
-  console.log(`queryIGDB - Usando cache: ${useCache}`);
+  appLog.info(`queryIGDB - Iniciando consulta para ${endpoint}`);
+  appLog.debug(`queryIGDB - Query: ${query}`);
+  appLog.debug(`queryIGDB - Usando cache: ${useCache}`);
   
   if (!endpoint || !query) {
-    console.error('queryIGDB - Endpoint ou query inválidos');
+    appLog.error('queryIGDB - Endpoint ou query inválidos');
     return [];
   }
   
   try {
     // Criar uma chave de cache baseada no endpoint e na consulta
-    const cacheKey = `${endpoint}_${encodeToBase64(query)}`;
+    const cacheKey = `${STORAGE_KEYS.API_CACHE_PREFIX}${endpoint}_${encodeToBase64(query)}`;
     
     // Verificar se temos dados em cache
     if (useCache) {
       const cachedData = await getCachedData<any>(cacheKey);
       if (cachedData) {
-        console.log(`queryIGDB - Dados encontrados no cache para ${endpoint}`);
+        appLog.info(`queryIGDB - Dados encontrados no cache para ${endpoint}`);
         return cachedData;
       }
     }
     
+    // Obter credenciais configuradas pelo usuário
+    const clientId = await AsyncStorage.getItem(STORAGE_KEYS.IGDB_CLIENT_ID) || igdbConfig.clientId;
+    
     // Se não temos dados em cache ou não devemos usar o cache, fazer a consulta à API
-    console.log(`queryIGDB - Buscando token para consulta à API`);
+    appLog.info(`queryIGDB - Buscando token para consulta à API`);
     const token = await getIGDBToken();
-    console.log(`queryIGDB - Token obtido: ${token ? 'Sim' : 'Não'}`);
+    appLog.debug(`queryIGDB - Token obtido: ${token ? 'Sim' : 'Não'}`);
     
     if (!token) {
-      console.error('queryIGDB - Não foi possível obter o token de autenticação');
+      appLog.error('queryIGDB - Não foi possível obter o token de autenticação');
       return [];
     }
     
-    console.log(`queryIGDB - Fazendo requisição para ${igdbConfig.apiUrl}/${endpoint}`);
-    console.log(`queryIGDB - Headers: Client-ID=${igdbConfig.clientId.substring(0, 5)}..., Authorization=Bearer ${token.substring(0, 5)}...`);
+    appLog.info(`queryIGDB - Fazendo requisição para ${igdbConfig.apiUrl}/${endpoint}`);
+    appLog.debug(`queryIGDB - Headers: Client-ID=${clientId.substring(0, 5)}..., Authorization=Bearer ${token.substring(0, 5)}...`);
     
     const response = await axios({
       url: `${igdbConfig.apiUrl}/${endpoint}`,
       method: 'POST',
       headers: {
         'Accept': 'application/json',
-        'Client-ID': igdbConfig.clientId,
+        'Client-ID': clientId,
         'Authorization': `Bearer ${token}`
       },
       data: query
     });
     
-    console.log(`queryIGDB - Resposta recebida com status: ${response.status}`);
-    console.log(`queryIGDB - Dados recebidos: ${response.data ? 'Sim' : 'Não'}`);
+    appLog.debug(`queryIGDB - Resposta recebida com status: ${response.status}`);
+    appLog.debug(`queryIGDB - Dados recebidos: ${response.data ? 'Sim' : 'Não'}`);
     
     // Verificar se a resposta contém dados válidos
     if (!response.data) {
-      console.error('queryIGDB - Resposta sem dados');
+      appLog.error('queryIGDB - Resposta sem dados');
       return [];
     }
     
     if (response.data) {
-      console.log(`queryIGDB - Número de itens recebidos: ${response.data.length}`);
-      console.log(`queryIGDB - Dados da resposta:`, JSON.stringify(response.data).substring(0, 200) + '...');
+      appLog.debug(`queryIGDB - Número de itens recebidos: ${response.data.length}`);
+      appLog.debug(`queryIGDB - Dados da resposta:`, JSON.stringify(response.data).substring(0, 200) + '...');
     }
     
     // Armazenar os dados em cache
@@ -146,19 +155,19 @@ export const queryIGDB = async (endpoint: string, query: string, useCache = true
     
     return response.data;
   } catch (error) {
-    console.error(`Erro na consulta IGDB (${endpoint}):`, error);
+    appLog.error(`Erro na consulta IGDB (${endpoint}):`, error);
     
     // Verificar se o erro é de autenticação
     if (axios.isAxiosError(error)) {
-      console.log(`queryIGDB - Erro Axios: ${error.message}`);
+      appLog.debug(`queryIGDB - Erro Axios: ${error.message}`);
       
       if (error.response) {
-        console.log(`queryIGDB - Status do erro: ${error.response.status}`);
-        console.log(`queryIGDB - Dados do erro:`, JSON.stringify(error.response.data).substring(0, 200));
+        appLog.debug(`queryIGDB - Status do erro: ${error.response.status}`);
+        appLog.debug(`queryIGDB - Dados do erro:`, JSON.stringify(error.response.data).substring(0, 200));
       }
       
       if (error.response?.status === 401) {
-        console.log('queryIGDB - Erro de autenticação, limpando token...');
+        appLog.info('queryIGDB - Erro de autenticação, limpando token...');
         // Limpar o token para forçar uma nova autenticação na próxima requisição
         await clearIGDBToken();
       }

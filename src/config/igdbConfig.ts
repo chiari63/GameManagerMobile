@@ -2,9 +2,9 @@
  * Configurações da API IGDB
  */
 export const igdbConfig = {
-  // Credenciais da API
-  clientId: 'u355xktlzyroqb65v4jv0wch1a7dc1', // Substitua pelo seu Client ID da Twitch
-  clientSecret: 's0nquzeduk0kknlr8w8w77mueiixwu', // Substitua pelo seu Client Secret da Twitch
+  // Credenciais da API (valores padrão, serão substituídos pelas configurações do usuário)
+  clientId: '',
+  clientSecret: '',
   
   // URL base da API
   apiUrl: 'https://api.igdb.com/v4',
