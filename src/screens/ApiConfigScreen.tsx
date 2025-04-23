@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { Text, TextInput, Button, useTheme } from 'react-native-paper';
-import { ChevronLeft, Save, Key } from 'lucide-react-native';
+import { Text, TextInput, Button, useTheme, Card, ActivityIndicator, Divider } from 'react-native-paper';
+import { ChevronLeft, Save, Key, Shield, Info, CheckCircle2, XCircle } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { StackNavigationProp } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { appColors } from '../theme';
@@ -11,7 +11,13 @@ import { useAlert } from '../contexts/AlertContext';
 import { RootStackParamList } from '../navigation/types';
 import { STORAGE_KEYS } from '../constants/storage';
 import { appLog } from '../config/environment';
-import { clearIGDBToken } from '../services/igdbAuth';
+import { 
+  saveIGDBCredentials, 
+  getIGDBCredentials, 
+  deleteIGDBCredentials, 
+  clearIGDBToken 
+} from '../services/igdbAuth';
+import { isSecureStoreAvailable } from '../utils/securityUtils';
 
 // Referências às chaves no AsyncStorage
 const API_CLIENT_ID_KEY = STORAGE_KEYS.IGDB_CLIENT_ID;
@@ -19,34 +25,52 @@ const API_CLIENT_SECRET_KEY = STORAGE_KEYS.IGDB_CLIENT_SECRET;
 const API_ACCESS_TOKEN_KEY = STORAGE_KEYS.IGDB_ACCESS_TOKEN;
 const API_TOKEN_EXPIRY_KEY = STORAGE_KEYS.IGDB_TOKEN_EXPIRY;
 
-type ApiConfigScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type ApiConfigScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ApiConfig'>;
 
-const ApiConfigScreen = () => {
+const ApiConfigScreen: React.FC = () => {
   const navigation = useNavigation<ApiConfigScreenNavigationProp>();
   const theme = useTheme();
   const { showAlert } = useAlert();
   
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
-  const [accessToken, setAccessToken] = useState('');
-  const [tokenExpiry, setTokenExpiry] = useState('');
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [tokenExpiry, setTokenExpiry] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isSecureStorage, setIsSecureStorage] = useState<boolean | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  
+  // Verificar se o armazenamento seguro está disponível
+  useEffect(() => {
+    const checkSecureStorage = async () => {
+      const available = await isSecureStoreAvailable();
+      setIsSecureStorage(available);
+    };
+    
+    checkSecureStorage();
+  }, []);
   
   // Carregar credenciais salvas
   useEffect(() => {
     const loadCredentials = async () => {
       try {
-        const savedClientId = await AsyncStorage.getItem(API_CLIENT_ID_KEY);
-        const savedClientSecret = await AsyncStorage.getItem(API_CLIENT_SECRET_KEY);
+        setLoading(true);
+        
+        // Carregar credenciais usando a função centralizada
+        const credentials = await getIGDBCredentials();
+        if (credentials.clientId) setClientId(credentials.clientId);
+        if (credentials.clientSecret) setClientSecret(credentials.clientSecret);
+        
+        // Carregar informações do token (ainda armazenadas no AsyncStorage)
         const savedAccessToken = await AsyncStorage.getItem(API_ACCESS_TOKEN_KEY);
         const savedTokenExpiry = await AsyncStorage.getItem(API_TOKEN_EXPIRY_KEY);
         
-        if (savedClientId) setClientId(savedClientId);
-        if (savedClientSecret) setClientSecret(savedClientSecret);
         if (savedAccessToken) setAccessToken(savedAccessToken);
         if (savedTokenExpiry) setTokenExpiry(savedTokenExpiry);
       } catch (error) {
         appLog.error('Erro ao carregar credenciais:', error);
+      } finally {
+        setLoading(false);
       }
     };
     
@@ -58,7 +82,7 @@ const ApiConfigScreen = () => {
     navigation.setOptions({
       headerLeft: () => (
         <TouchableOpacity 
-          onPress={() => navigation.navigate('MainTabs')}
+          onPress={() => navigation.goBack()}
           style={{ marginLeft: 8 }}
         >
           <ChevronLeft color={theme.colors.onSurface} size={24} />
@@ -85,20 +109,14 @@ const ApiConfigScreen = () => {
             try {
               setLoading(true);
               
-              // Limpar credenciais armazenadas
-              await AsyncStorage.removeItem(API_CLIENT_ID_KEY);
-              await AsyncStorage.removeItem(API_CLIENT_SECRET_KEY);
-              await AsyncStorage.removeItem(API_ACCESS_TOKEN_KEY);
-              await AsyncStorage.removeItem(API_TOKEN_EXPIRY_KEY);
-              
-              // Também limpar o token na camada de serviço
-              await clearIGDBToken();
+              // Usar a função centralizada para remover credenciais
+              await deleteIGDBCredentials();
               
               // Limpar estados
               setClientId('');
               setClientSecret('');
-              setAccessToken('');
-              setTokenExpiry('');
+              setAccessToken(null);
+              setTokenExpiry(null);
               
               showAlert({
                 title: 'Sucesso',
@@ -127,17 +145,20 @@ const ApiConfigScreen = () => {
     try {
       setLoading(true);
       
-      // Obter todos os valores relevantes
-      const storedClientId = await AsyncStorage.getItem(API_CLIENT_ID_KEY);
-      const storedClientSecret = await AsyncStorage.getItem(API_CLIENT_SECRET_KEY);
+      // Obter credenciais usando a função centralizada
+      const credentials = await getIGDBCredentials();
+      
+      // Obter informações do token
       const storedToken = await AsyncStorage.getItem(API_ACCESS_TOKEN_KEY);
       const storedExpiry = await AsyncStorage.getItem(API_TOKEN_EXPIRY_KEY);
       
       // Criar mensagem de depuração
       const debugMessage = `
-        Client ID: ${storedClientId || 'Não definido'}
+        Usando armazenamento seguro: ${isSecureStorage ? 'Sim' : 'Não'}
         
-        Client Secret: ${storedClientSecret ? '******' : 'Não definido'}
+        Client ID: ${credentials.clientId || 'Não definido'}
+        
+        Client Secret: ${credentials.clientSecret ? '******' : 'Não definido'}
         
         Access Token: ${storedToken ? 
           `${storedToken.substring(0, 10)}...${storedToken.substring(storedToken.length - 5)}` : 
@@ -181,8 +202,6 @@ const ApiConfigScreen = () => {
       }
       
       // Limpar token existente antes de testar
-      await AsyncStorage.removeItem(API_ACCESS_TOKEN_KEY);
-      await AsyncStorage.removeItem(API_TOKEN_EXPIRY_KEY);
       await clearIGDBToken();
       
       // Fazer requisição para obter token usando axios
@@ -264,18 +283,12 @@ const ApiConfigScreen = () => {
         return;
       }
       
-      // Limpar token existente antes de salvar novas credenciais
-      await AsyncStorage.removeItem(API_ACCESS_TOKEN_KEY);
-      await AsyncStorage.removeItem(API_TOKEN_EXPIRY_KEY);
-      await clearIGDBToken();
-      
-      // Salvar credenciais
-      await AsyncStorage.setItem(API_CLIENT_ID_KEY, clientId);
-      await AsyncStorage.setItem(API_CLIENT_SECRET_KEY, clientSecret);
+      // Usar a função centralizada para salvar credenciais de forma segura
+      await saveIGDBCredentials(clientId, clientSecret);
       
       showAlert({
         title: 'Sucesso',
-        message: 'Credenciais da API salvas com sucesso!',
+        message: 'Credenciais da API salvas com segurança!',
         buttons: [{ text: 'OK', onPress: () => navigation.goBack() }]
       });
     } catch (error) {
@@ -290,8 +303,49 @@ const ApiConfigScreen = () => {
     }
   };
   
+  // Testar conexão com a API
+  const testApiConnection = async () => {
+    if (!accessToken) {
+      showAlert({
+        title: 'Erro',
+        message: 'Sem token de acesso. Por favor, salve suas credenciais primeiro.',
+        buttons: [{ text: 'OK', onPress: () => {} }]
+      });
+      return;
+    }
+
+    setLoading(true);
+    setTestResult(null);
+    
+    try {
+      const response = await axios.post(
+        'https://api.igdb.com/v4/games',
+        'fields name; limit 1;',
+        {
+          headers: {
+            'Client-ID': clientId,
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+      
+      setTestResult({
+        success: true,
+        message: 'Conexão com a API IGDB bem-sucedida!'
+      });
+    } catch (error) {
+      console.error('Erro ao testar conexão com API:', error);
+      setTestResult({
+        success: false,
+        message: `Erro na conexão: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   // Formatação de data para exibição
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     
     try {
@@ -304,91 +358,108 @@ const ApiConfigScreen = () => {
   
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Configurações da API IGDB</Text>
-        
-        <Text style={styles.description}>
-          Para usar a API IGDB, você precisa de credenciais da API Twitch. 
-          Preencha o Client ID e Client Secret obtidos no Twitch Developer Dashboard.
-        </Text>
-        
-        <View style={styles.form}>
+      <Card style={styles.card}>
+        <Card.Title title="Configurações da API IGDB" />
+        <Card.Content>
+          <Text style={styles.infoText}>
+            Para acessar a API IGDB, você precisa registrar um aplicativo no Twitch Developer Console e obter suas credenciais.
+          </Text>
+          
+          <View style={styles.infoContainer}>
+            <Info size={18} color="#3498db" />
+            <Text style={styles.infoLink}>
+              Visite: dev.twitch.tv/console/apps
+            </Text>
+          </View>
+
           <TextInput
             label="Client ID"
             value={clientId}
             onChangeText={setClientId}
-            mode="outlined"
             style={styles.input}
+            mode="outlined"
           />
           
           <TextInput
             label="Client Secret"
             value={clientSecret}
             onChangeText={setClientSecret}
+            style={styles.input}
             mode="outlined"
             secureTextEntry
-            style={styles.input}
           />
           
-          <Button 
-            mode="contained" 
-            onPress={saveCredentials}
-            style={styles.button}
-            loading={loading}
-            disabled={loading}
-            icon={() => <Save size={20} color={theme.colors.background} />}
-          >
-            Salvar Credenciais
-          </Button>
-          
-          <Button 
-            mode="outlined" 
-            onPress={testConnection}
-            style={styles.button}
-            loading={loading}
-            disabled={loading}
-          >
-            Testar Conexão
-          </Button>
-          
-          <Button 
-            mode="outlined" 
-            onPress={clearCredentials}
-            style={[styles.button, styles.dangerButton]}
-            loading={loading}
-            disabled={loading}
-            textColor={appColors.destructive}
-          >
-            Limpar Credenciais
-          </Button>
-          
-          {accessToken && (
-            <View style={styles.tokenInfo}>
-              <Text style={styles.tokenTitle}>Informações do Token</Text>
-              <Text style={styles.tokenLabel}>Token:</Text>
-              <Text style={styles.tokenValue}>
-                {`${accessToken.substring(0, 15)}...${accessToken.substring(accessToken.length - 5)}`}
-              </Text>
-              
-              <Text style={styles.tokenLabel}>Expira em:</Text>
-              <Text style={styles.tokenValue}>
-                {formatDate(tokenExpiry)}
-              </Text>
-            </View>
-          )}
-        </View>
-        
-        {/* Botão para depuração */}
-        <Button 
-          mode="contained" 
-          icon={() => <Key size={20} color={theme.colors.background} />}
-          style={styles.button}
-          onPress={debugStorage}
-          disabled={loading}
-        >
-          Depurar Storage
-        </Button>
-      </View>
+          <View style={styles.buttonContainer}>
+            <Button 
+              mode="contained" 
+              onPress={saveCredentials} 
+              disabled={loading}
+              style={styles.button}
+            >
+              {loading ? 'Salvando...' : 'Salvar Credenciais'}
+            </Button>
+            
+            <Button 
+              mode="outlined" 
+              onPress={clearCredentials}
+              style={styles.button}
+              textColor="red"
+            >
+              Limpar Credenciais
+            </Button>
+          </View>
+        </Card.Content>
+      </Card>
+
+      {accessToken && (
+        <Card style={styles.card}>
+          <Card.Title title="Token de Acesso" />
+          <Card.Content>
+            <Text style={styles.tokenInfo}>
+              Status: <Text style={styles.tokenActive}>Ativo</Text>
+            </Text>
+            <Text style={styles.tokenInfo}>
+              Expira em: {formatDate(tokenExpiry)}
+            </Text>
+            
+            <Divider style={styles.divider} />
+            
+            <Button 
+              mode="contained" 
+              onPress={testApiConnection}
+              disabled={loading}
+              style={styles.testButton}
+            >
+              Testar Conexão
+            </Button>
+            
+            {loading && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" />
+                <Text>Processando...</Text>
+              </View>
+            )}
+            
+            {testResult && (
+              <View style={styles.resultContainer}>
+                {testResult.success ? (
+                  <CheckCircle2 size={24} color="green" />
+                ) : (
+                  <XCircle size={24} color="red" />
+                )}
+                <Text style={[
+                  styles.resultText,
+                  { color: testResult.success ? 'green' : 'red' }
+                ]}>
+                  {testResult.message}
+                </Text>
+              </View>
+            )}
+          </Card.Content>
+        </Card>
+      )}
+      
+      <View style={styles.spacer} />
     </ScrollView>
   );
 };
@@ -398,59 +469,66 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: appColors.background,
   },
-  content: {
-    padding: 16,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: appColors.foreground,
-  },
-  description: {
-    fontSize: 14,
-    color: appColors.secondary,
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  form: {
-    marginBottom: 24,
+  card: {
+    margin: 16,
+    elevation: 4,
   },
   input: {
     marginBottom: 16,
   },
-  button: {
-    marginVertical: 8,
+  infoText: {
+    marginBottom: 12,
+    lineHeight: 20,
   },
-  dangerButton: {
-    borderColor: appColors.destructive,
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  infoLink: {
+    marginLeft: 8,
+    color: '#3498db',
+  },
+  buttonContainer: {
+    marginTop: 8,
+  },
+  button: {
+    marginBottom: 12,
+  },
+  testButton: {
+    marginTop: 8,
   },
   tokenInfo: {
-    marginTop: 24,
-    padding: 16,
+    marginBottom: 8,
+    fontSize: 16,
+  },
+  tokenActive: {
+    color: 'green',
+    fontWeight: 'bold',
+  },
+  divider: {
+    marginVertical: 16,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  resultContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
     borderRadius: 8,
-    backgroundColor: appColors.card,
   },
-  tokenTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: appColors.foreground,
+  resultText: {
+    marginLeft: 8,
+    fontSize: 16,
   },
-  tokenLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: appColors.secondary,
-    marginBottom: 4,
-  },
-  tokenValue: {
-    fontSize: 14,
-    color: appColors.foreground,
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: appColors.background,
-    borderRadius: 4,
+  spacer: {
+    height: 40,
   },
 });
 

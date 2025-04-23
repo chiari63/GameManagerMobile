@@ -1,30 +1,28 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AppProviders } from './providers/AppProviders';
 import { NavigationContainer } from '@react-navigation/native';
+import { AppNavigator } from './navigation';
 import { PaperProvider } from 'react-native-paper';
-import { theme } from './theme';
-import { initializeStorage } from './services/storage';
-import { requestNotificationPermissions } from './services/notifications';
-import MainNavigator from './navigation/MainNavigator';
+import { useThemeContext } from './contexts/ThemeContext';
+
+const AppContent = () => {
+  const { theme, isDarkMode } = useThemeContext();
+  
+  return (
+    <PaperProvider theme={theme}>
+      <NavigationContainer theme={theme}>
+        <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+        <AppNavigator />
+      </NavigationContainer>
+    </PaperProvider>
+  );
+};
 
 export default function App() {
-  useEffect(() => {
-    // Inicializa o armazenamento local
-    initializeStorage();
-    
-    // Solicita permissões de notificação
-    requestNotificationPermissions();
-  }, []);
-
   return (
-    <SafeAreaProvider>
-      <PaperProvider theme={theme}>
-        <NavigationContainer>
-          <MainNavigator />
-          <StatusBar style="light" />
-        </NavigationContainer>
-      </PaperProvider>
-    </SafeAreaProvider>
+    <AppProviders>
+      <AppContent />
+    </AppProviders>
   );
 } 

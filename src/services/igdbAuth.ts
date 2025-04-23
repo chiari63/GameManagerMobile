@@ -1,8 +1,9 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { igdbConfig } from '../config/igdbConfig';
 import { STORAGE_KEYS } from '../constants/storage';
 import { appLog } from '../config/environment';
+import { getSecureValue, saveSecureValue, deleteSecureValue } from '../utils/securityUtils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Chaves para armazenamento do token
 const IGDB_TOKEN_KEY = STORAGE_KEYS.IGDB_ACCESS_TOKEN;
@@ -41,9 +42,9 @@ export const getIGDBToken = async (): Promise<string> => {
       return storedToken;
     }
     
-    // Obter credenciais configuradas pelo usuário
-    const userClientId = await AsyncStorage.getItem(API_CLIENT_ID_KEY);
-    const userClientSecret = await AsyncStorage.getItem(API_CLIENT_SECRET_KEY);
+    // Obter credenciais configuradas pelo usuário (usando armazenamento seguro)
+    const userClientId = await getSecureValue(API_CLIENT_ID_KEY);
+    const userClientSecret = await getSecureValue(API_CLIENT_SECRET_KEY);
     
     // Definir quais credenciais usar (priorizar as configuradas pelo usuário)
     const clientId = userClientId || igdbConfig.clientId;
@@ -121,4 +122,60 @@ export const clearIGDBToken = async (): Promise<void> => {
   await AsyncStorage.removeItem(IGDB_TOKEN_KEY);
   await AsyncStorage.removeItem(IGDB_TOKEN_EXPIRY_KEY);
   appLog.info('clearIGDBToken - Token IGDB removido');
+};
+
+/**
+ * Salva as credenciais da API IGDB de forma segura
+ * @param clientId Client ID da API Twitch/IGDB
+ * @param clientSecret Client Secret da API Twitch/IGDB
+ */
+export const saveIGDBCredentials = async (clientId: string, clientSecret: string): Promise<void> => {
+  try {
+    // Limpar token existente antes de salvar novas credenciais
+    await clearIGDBToken();
+    
+    // Salvar credenciais usando armazenamento seguro
+    await saveSecureValue(API_CLIENT_ID_KEY, clientId);
+    await saveSecureValue(API_CLIENT_SECRET_KEY, clientSecret);
+    
+    appLog.info('saveIGDBCredentials - Credenciais da API IGDB salvas com segurança');
+  } catch (error) {
+    appLog.error('saveIGDBCredentials - Erro ao salvar credenciais da API IGDB:', error);
+    throw new Error('Falha ao salvar credenciais da API IGDB');
+  }
+};
+
+/**
+ * Obtém as credenciais da API IGDB armazenadas
+ * @returns Objeto com as credenciais ou valores vazios se não existirem
+ */
+export const getIGDBCredentials = async (): Promise<{ clientId: string; clientSecret: string }> => {
+  try {
+    const clientId = await getSecureValue(API_CLIENT_ID_KEY) || '';
+    const clientSecret = await getSecureValue(API_CLIENT_SECRET_KEY) || '';
+    
+    return { clientId, clientSecret };
+  } catch (error) {
+    appLog.error('getIGDBCredentials - Erro ao obter credenciais da API IGDB:', error);
+    return { clientId: '', clientSecret: '' };
+  }
+};
+
+/**
+ * Remove as credenciais da API IGDB armazenadas
+ */
+export const deleteIGDBCredentials = async (): Promise<void> => {
+  try {
+    // Limpar token existente
+    await clearIGDBToken();
+    
+    // Remover credenciais do armazenamento seguro
+    await deleteSecureValue(API_CLIENT_ID_KEY);
+    await deleteSecureValue(API_CLIENT_SECRET_KEY);
+    
+    appLog.info('deleteIGDBCredentials - Credenciais da API IGDB removidas');
+  } catch (error) {
+    appLog.error('deleteIGDBCredentials - Erro ao remover credenciais da API IGDB:', error);
+    throw new Error('Falha ao remover credenciais da API IGDB');
+  }
 }; 

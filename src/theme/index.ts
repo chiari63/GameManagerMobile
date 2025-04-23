@@ -42,6 +42,40 @@ const colors = {
   ],
 };
 
+// Cores para o tema claro
+const lightColors = {
+  // Cores primárias
+  primary: '#3b82f6', // Azul primário mais escuro para contraste
+  secondary: '#2563eb', // Azul secundário mais escuro
+  
+  // Cores de fundo e texto
+  background: '#f8fafc', // Fundo claro
+  foreground: '#0f172a', // Texto escuro
+  
+  // Cores de cartões
+  card: '#ffffff', // Fundo dos cards branco
+  cardForeground: '#0f172a', // Texto dos cards escuro
+  
+  // Cores de destaque
+  accent: '#e2e8f0', // Cor de destaque para elementos secundários
+  accentForeground: '#0f172a', // Texto sobre elementos de destaque
+  
+  // Cores de alerta/erro
+  destructive: '#e11d48', // Vermelho para alertas/erros
+  destructiveForeground: '#ffffff', // Texto sobre alertas
+  
+  // Cores de elementos de interface
+  muted: '#f1f5f9', // Elementos com menor destaque
+  mutedForeground: '#64748b', // Texto com menor destaque
+  
+  // Cores de borda e entrada
+  border: '#e2e8f0', // Cor das bordas
+  input: '#f1f5f9', // Cor de fundo dos inputs
+  
+  // Cores para gráficos (mantidas do tema escuro)
+  chartColors: colors.chartColors,
+};
+
 // Tema escuro personalizado
 export const darkTheme = {
   ...MD3DarkTheme,
@@ -82,8 +116,49 @@ export const darkTheme = {
   },
 };
 
+// Tema claro personalizado
+export const lightTheme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    primary: lightColors.primary,
+    onPrimary: '#ffffff',
+    primaryContainer: lightColors.primary + '15', // Versão com transparência
+    onPrimaryContainer: lightColors.primary,
+    secondary: lightColors.secondary,
+    onSecondary: '#ffffff',
+    secondaryContainer: lightColors.secondary + '15', // Versão com transparência
+    onSecondaryContainer: lightColors.secondary,
+    tertiary: lightColors.accent,
+    onTertiary: lightColors.accentForeground,
+    tertiaryContainer: lightColors.accent + '30', // Versão com transparência
+    onTertiaryContainer: lightColors.accentForeground,
+    error: lightColors.destructive,
+    onError: lightColors.destructiveForeground,
+    errorContainer: lightColors.destructive + '15', // Versão com transparência
+    onErrorContainer: lightColors.destructive,
+    background: lightColors.background,
+    onBackground: lightColors.foreground,
+    surface: lightColors.card,
+    onSurface: lightColors.cardForeground,
+    surfaceVariant: lightColors.muted,
+    onSurfaceVariant: lightColors.mutedForeground,
+    outline: lightColors.border,
+    outlineVariant: lightColors.border + '80', // Versão com transparência
+    elevation: {
+      level0: 'transparent',
+      level1: lightColors.card,
+      level2: lightColors.card,
+      level3: lightColors.card,
+      level4: lightColors.card,
+      level5: lightColors.card,
+    },
+  },
+};
+
 // Exportando as cores para uso em outros componentes
 export const appColors = colors;
+export const appLightColors = lightColors;
 
 // Tema padrão (escuro)
 export default darkTheme; 
