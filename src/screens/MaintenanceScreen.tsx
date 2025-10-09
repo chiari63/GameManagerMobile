@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Text, Card, Divider, useTheme, IconButton, Button } from 'react-native-paper';
 import { getConsoles, getAccessories, updateConsole, updateAccessory } from '../services/storage';
-import { getUpcomingMaintenanceItems } from '../services/notifications';
+import { getUpcomingMaintenanceItems, clearMaintenanceItemsCache } from '../services/notifications';
 import { MaintenanceItem } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
-import { Wrench, Calendar, ChevronLeft, AlertTriangle, CheckCircle, Clock, ArrowLeft, RefreshCw } from 'lucide-react-native';
+import { Wrench, Calendar, ChevronLeft, AlertTriangle, CheckCircle, Clock, RefreshCw } from 'lucide-react-native';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { appColors } from '../theme';
-import { commonStyles } from '../theme/commonStyles';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAlert } from '../contexts/AlertContext';
+import { appLog } from '../config/environment';
 
 type MainTabParamList = {
   Home: undefined;
@@ -40,11 +39,13 @@ const MaintenanceScreen = () => {
   const loadMaintenanceItems = useCallback(async () => {
     try {
       setIsLoading(true);
-      console.log('Carregando consoles e acessórios...');
+      // Limpar cache para garantir dados atualizados
+      clearMaintenanceItemsCache();
+      appLog.debug('Loading consoles and accessories...');
       const consoles = await getConsoles();
       const accessories = await getAccessories();
       
-      console.log(`Dados carregados: ${consoles.length} consoles, ${accessories.length} acessórios`);
+      appLog.debug(`Data loaded: ${consoles.length} consoles, ${accessories.length} accessories`);
       
       // Obter itens com manutenção nos próximos dias
       const upcoming = getUpcomingMaintenanceItems(consoles, accessories);
@@ -91,12 +92,12 @@ const MaintenanceScreen = () => {
         }
       });
       
-      console.log(`Itens processados: ${upcomingFiltered.length} próximos, ${overdue.length} atrasados`);
+      appLog.debug(`Items processed: ${upcomingFiltered.length} upcoming, ${overdue.length} overdue`);
       
       setUpcomingItems(upcomingFiltered);
       setOverdueItems(overdue);
     } catch (error) {
-      console.error('Erro ao carregar itens de manutenção:', error);
+      appLog.error('Error loading maintenance items:', error);
       showAlert({
         title: 'Erro',
         message: 'Não foi possível carregar os itens de manutenção.',
@@ -136,37 +137,34 @@ const MaintenanceScreen = () => {
   // Usar useFocusEffect para recarregar os dados sempre que a tela receber foco
   useFocusEffect(
     useCallback(() => {
-      console.log('Tela de Manutenção recebeu foco - recarregando dados');
+      appLog.debug('Maintenance screen focused - reloading data');
       loadMaintenanceItems();
       
       return () => {
-        // Função de limpeza quando a tela perde o foco
-        console.log('Tela de Manutenção perdeu o foco');
+        appLog.debug('Maintenance screen unfocused');
       };
     }, [loadMaintenanceItems])
   );
 
   const handleMarkAsDone = async (item: MaintenanceItem) => {
     try {
-      console.log(`Tentando marcar item como concluído: ID=${item.id}, Tipo=${item.type}, Nome=${item.name}`);
+      appLog.debug(`Marking item as completed: ID=${item.id}, Type=${item.type}, Name=${item.name}`);
       
       // Formatar a data atual no padrão brasileiro (DD/MM/YYYY)
       const today = new Date();
       const formattedDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
       
-      console.log(`Data formatada para padrão brasileiro: ${formattedDate}`);
+      appLog.debug(`Formatted date (Brazilian format): ${formattedDate}`);
       
       // Verificar se o item existe antes de tentar atualizá-lo
       if (item.type === 'console') {
         // Obter todos os consoles para verificar se o item existe
         const consoles = await getConsoles();
-        console.log(`Consoles carregados: ${consoles.length}`);
         
         const consoleExists = consoles.some(consoleItem => consoleItem.id === item.id);
-        console.log(`Console existe? ${consoleExists}`);
         
         if (!consoleExists) {
-          console.error(`Console não encontrado: ID=${item.id}`);
+          appLog.error(`Console not found: ID=${item.id}`);
           showAlert({
             title: 'Erro',
             message: 'Console não encontrado. Pode ter sido excluído.',
@@ -176,21 +174,19 @@ const MaintenanceScreen = () => {
           return;
         }
         
-        console.log(`Atualizando console: ID=${item.id}`);
+        appLog.debug(`Updating console: ID=${item.id}`);
         await updateConsole(item.id, { 
           lastMaintenanceDate: formattedDate 
         });
-        console.log(`Console atualizado com sucesso: ID=${item.id}`);
+        appLog.debug(`Console updated successfully: ID=${item.id}`);
       } else {
         // Obter todos os acessórios para verificar se o item existe
         const accessories = await getAccessories();
-        console.log(`Acessórios carregados: ${accessories.length}`);
         
         const accessoryExists = accessories.some(accessory => accessory.id === item.id);
-        console.log(`Acessório existe? ${accessoryExists}`);
         
         if (!accessoryExists) {
-          console.error(`Acessório não encontrado: ID=${item.id}`);
+          appLog.error(`Accessory not found: ID=${item.id}`);
           showAlert({
             title: 'Erro',
             message: 'Acessório não encontrado. Pode ter sido excluído.',
@@ -200,11 +196,11 @@ const MaintenanceScreen = () => {
           return;
         }
         
-        console.log(`Atualizando acessório: ID=${item.id}`);
+        appLog.debug(`Updating accessory: ID=${item.id}`);
         await updateAccessory(item.id, { 
           lastMaintenanceDate: formattedDate 
         });
-        console.log(`Acessório atualizado com sucesso: ID=${item.id}`);
+        appLog.debug(`Accessory updated successfully: ID=${item.id}`);
       }
       
       showAlert({
@@ -214,10 +210,10 @@ const MaintenanceScreen = () => {
       });
       
       // Recarregar os dados após marcar como concluída
-      console.log('Recarregando dados após marcar manutenção como concluída');
+      appLog.debug('Reloading data after marking maintenance as completed');
       await loadMaintenanceItems();
     } catch (error) {
-      console.error('Erro ao marcar manutenção como concluída:', error);
+      appLog.error('Error marking maintenance as completed:', error);
       showAlert({
         title: 'Erro',
         message: `Não foi possível atualizar o status da manutenção: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
@@ -240,7 +236,7 @@ const MaintenanceScreen = () => {
       const date = new Date(dateString);
       return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
     } catch (error) {
-      console.error('Erro ao formatar data:', error);
+      appLog.error('Error formatting date:', error);
       return dateString;
     }
   };

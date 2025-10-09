@@ -12,17 +12,19 @@ import Constants from 'expo-constants';
 import { AlertProvider } from './src/contexts/AlertContext';
 import { ValuesVisibilityProvider } from './src/contexts/ValuesVisibilityContext';
 
-// Log inicial do ambiente
-console.log('[App] Ambiente de execução:', {
-  platform: Platform.OS,
-  version: Platform.Version,
-  isExpo: Constants.appOwnership === 'expo',
-  isStandalone: Constants.appOwnership === null,
-  expoVersion: Constants.expoVersion,
-  appVersion: Constants.manifest2?.extra?.expoClient?.version,
-  screenDimensions: Dimensions.get('window'),
-  buildType: __DEV__ ? 'development' : 'production'
-});
+// Log inicial do ambiente (apenas em desenvolvimento)
+if (__DEV__) {
+  console.log('[App] Ambiente de execução:', {
+    platform: Platform.OS,
+    version: Platform.Version,
+    isExpo: Constants.appOwnership === 'expo',
+    isStandalone: Constants.appOwnership === null,
+    expoVersion: Constants.expoVersion,
+    appVersion: Constants.manifest2?.extra?.expoClient?.version,
+    screenDimensions: Dimensions.get('window'),
+    buildType: 'development'
+  });
+}
 
 // Configurar o tempo máximo de exibição do splash screen
 const SPLASH_SCREEN_TIMEOUT = 5000;
