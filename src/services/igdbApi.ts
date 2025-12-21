@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getIGDBToken, clearIGDBToken } from './igdbAuth';
+import { getIGDBToken, clearIGDBToken, getIGDBCredentials } from './igdbAuth';
 import { igdbConfig } from '../config/igdbConfig';
 import { cacheData, getCachedData } from './cacheService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30,8 +30,16 @@ const encodeToBase64 = (str: string): string => {
  */
 export const checkIGDBConnection = async (): Promise<{ connected: boolean; message: string }> => {
   try {
-    // Obter credenciais configuradas pelo usuário
-    const clientId = await AsyncStorage.getItem(STORAGE_KEYS.IGDB_CLIENT_ID) || igdbConfig.clientId;
+    // Obter credenciais configuradas pelo usuário (do SecureStore)
+    const credentials = await getIGDBCredentials();
+    const clientId = credentials.clientId || igdbConfig.clientId;
+    
+    if (!clientId) {
+      return { 
+        connected: false, 
+        message: 'Credenciais da API IGDB não configuradas' 
+      };
+    }
     
     // Tentar obter um token para verificar a conexão
     const token = await getIGDBToken();
@@ -107,8 +115,14 @@ export const queryIGDB = async (endpoint: string, query: string, useCache = true
       }
     }
     
-    // Obter credenciais configuradas pelo usuário
-    const clientId = await AsyncStorage.getItem(STORAGE_KEYS.IGDB_CLIENT_ID) || igdbConfig.clientId;
+    // Obter credenciais configuradas pelo usuário (do SecureStore)
+    const credentials = await getIGDBCredentials();
+    const clientId = credentials.clientId || igdbConfig.clientId;
+    
+    if (!clientId) {
+      appLog.error('queryIGDB - Client ID não encontrado');
+      throw new Error('Credenciais da API IGDB não configuradas');
+    }
     
     // Se não temos dados em cache ou não devemos usar o cache, fazer a consulta à API
     appLog.info(`queryIGDB - Buscando token para consulta à API`);

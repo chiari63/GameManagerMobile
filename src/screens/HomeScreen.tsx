@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions, TouchableWithoutFeedback, Alert, RefreshControl } from 'react-native';
-import { Text, Card, useTheme, IconButton, Button } from 'react-native-paper';
+import { Text, Card, useTheme, IconButton, Button, Portal, Modal } from 'react-native-paper';
 import { getGames, getConsoles, getAccessories, getWishlistItems } from '../services/storage';
 import { Gamepad, Disc3, Gamepad2, Heart, Menu as MenuIcon, X, Settings, Save, Upload, RefreshCw, Wrench, Eye } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -9,7 +9,6 @@ import { appColors } from '../theme';
 import { appConfig } from '../config/app';
 import { createBackup, restoreBackup, backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import NotificationIcon from '../components/NotificationIcon';
-import ApiStatusIcon from '../components/ApiStatusIcon';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,6 +31,7 @@ type RootStackParamList = {
   MainTabs: undefined;
   Maintenance: undefined;
   Notifications: undefined;
+  ApisConfig: undefined;
   ApiConfig: undefined;
 };
 
@@ -58,6 +58,7 @@ const HomeScreen = () => {
     totalEstimatedWishlist: 0,
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [backupModalVisible, setBackupModalVisible] = useState(false);
   const drawerAnimation = useRef(new Animated.Value(0)).current;
 
   // Adicionar listener para o botão de menu na barra de navegação
@@ -72,7 +73,6 @@ const HomeScreen = () => {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
-          <ApiStatusIcon size={20} />
           <NotificationIcon size={24} />
         </View>
       ),
@@ -252,6 +252,21 @@ const HomeScreen = () => {
     });
   };
 
+  const handleBackupMenu = () => {
+    toggleDrawer(); // Fechar o drawer primeiro
+    setBackupModalVisible(true);
+  };
+
+  const handleCreateBackupFromModal = async () => {
+    setBackupModalVisible(false);
+    await handleCreateBackup();
+  };
+
+  const handleRestoreBackupFromModal = () => {
+    setBackupModalVisible(false);
+    confirmRestoreBackup();
+  };
+
   const renderDrawer = () => {
     return (
       <>
@@ -292,30 +307,15 @@ const HomeScreen = () => {
           <View style={styles.drawerContent}>
             <TouchableOpacity
               style={styles.drawerItem}
-              onPress={handleCreateBackup}
+              onPress={handleBackupMenu}
             >
               <View style={styles.drawerItemIcon}>
                 <Save color={theme.colors.onSurfaceVariant} size={20} />
               </View>
               <View style={styles.drawerItemContent}>
-                <Text style={styles.drawerItemTitle}>Criar Backup</Text>
+                <Text style={styles.drawerItemTitle}>Backup e Restauração</Text>
                 <Text style={styles.drawerItemDescription}>
-                  Exportar dados do aplicativo
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.drawerItem}
-              onPress={confirmRestoreBackup}
-            >
-              <View style={styles.drawerItemIcon}>
-                <Upload color={theme.colors.onSurfaceVariant} size={20} />
-              </View>
-              <View style={styles.drawerItemContent}>
-                <Text style={styles.drawerItemTitle}>Restaurar Backup</Text>
-                <Text style={styles.drawerItemDescription}>
-                  Importar dados de um backup
+                  Criar ou restaurar backup dos dados
                 </Text>
               </View>
             </TouchableOpacity>
@@ -361,7 +361,7 @@ const HomeScreen = () => {
             <TouchableOpacity
               style={styles.drawerItem}
               onPress={() => {
-                navigation.navigate('ApiConfig');
+                navigation.navigate('ApisConfig');
                 toggleDrawer();
               }}
             >
@@ -369,9 +369,9 @@ const HomeScreen = () => {
                 <Settings color={theme.colors.onSurfaceVariant} size={20} />
               </View>
               <View style={styles.drawerItemContent}>
-                <Text style={styles.drawerItemTitle}>Configurar API</Text>
+                <Text style={styles.drawerItemTitle}>Configurar APIs</Text>
                 <Text style={styles.drawerItemDescription}>
-                  Gerenciar credenciais da API IGDB
+                  Configure integrações opcionais (ex.: IGDB)
                 </Text>
               </View>
             </TouchableOpacity>
@@ -580,6 +580,65 @@ const HomeScreen = () => {
         )}
       </ScrollView>
       {renderDrawer()}
+      
+      {/* Modal de Backup e Restauração */}
+      <Portal>
+        <Modal
+          visible={backupModalVisible}
+          onDismiss={() => setBackupModalVisible(false)}
+          contentContainerStyle={styles.backupModalContainer}
+        >
+          <View style={styles.backupModalContent}>
+            <Text style={[styles.backupModalTitle, { color: theme.colors.onSurface }]}>
+              Backup e Restauração
+            </Text>
+            <Text style={[styles.backupModalSubtitle, { color: theme.colors.onSurfaceVariant }]}>
+              Escolha uma ação:
+            </Text>
+            
+            <View style={styles.backupModalButtons}>
+              <TouchableOpacity
+                style={[styles.backupModalButton, { backgroundColor: theme.colors.primary }]}
+                onPress={handleCreateBackupFromModal}
+              >
+                <View style={styles.backupModalButtonIcon}>
+                  <Save color="#ffffff" size={24} />
+                </View>
+                <View style={styles.backupModalButtonContent}>
+                  <Text style={styles.backupModalButtonTitle}>Criar Backup</Text>
+                  <Text style={styles.backupModalButtonDescription}>
+                    Exportar dados do aplicativo
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.backupModalButton, { backgroundColor: theme.colors.primary }]}
+                onPress={handleRestoreBackupFromModal}
+              >
+                <View style={styles.backupModalButtonIcon}>
+                  <Upload color="#ffffff" size={24} />
+                </View>
+                <View style={styles.backupModalButtonContent}>
+                  <Text style={styles.backupModalButtonTitle}>Restaurar Backup</Text>
+                  <Text style={styles.backupModalButtonDescription}>
+                    Importar dados de um backup
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <Button
+                mode="outlined"
+                onPress={() => setBackupModalVisible(false)}
+                style={styles.backupModalCancelButton}
+                labelStyle={{ color: theme.colors.onSurface }}
+              >
+                Cancelar
+              </Button>
+            </View>
+          </View>
+        </Modal>
+      </Portal>
     </View>
   );
 };
@@ -805,6 +864,67 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 998,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  backupModalContainer: {
+    backgroundColor: 'transparent',
+    padding: 20,
+    margin: 20,
+  },
+  backupModalContent: {
+    backgroundColor: '#121a2b',
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  backupModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+    color: '#ffffff',
+  },
+  backupModalSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    color: '#94a3b8',
+  },
+  backupModalButtons: {
+    gap: 12,
+  },
+  backupModalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: appColors.primary,
+  },
+  backupModalButtonIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  backupModalButtonContent: {
+    flex: 1,
+  },
+  backupModalButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  backupModalButtonDescription: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  backupModalCancelButton: {
+    marginTop: 8,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
 });
 

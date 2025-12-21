@@ -190,10 +190,10 @@ const ConsoleDetailsScreen = () => {
             </View>
           </View>
           
-          {console.maintenanceNotes && (
+          {console.maintenanceDescription && (
             <View style={styles.notesContainer}>
               <Text style={styles.notesLabel}>Observações:</Text>
-              <Text style={styles.notesText}>{console.maintenanceNotes}</Text>
+              <Text style={styles.notesText}>{console.maintenanceDescription}</Text>
             </View>
           )}
         </View>

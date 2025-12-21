@@ -26,6 +26,7 @@ import {
   MaintenanceScreen,
   NotificationsScreen,
   IGDBSearchScreen,
+  ApisConfigScreen,
   ApiConfigScreen,
 } from '../screens';
 
@@ -234,7 +235,7 @@ const MainTabNavigator = () => {
               fontSize: 10,
               marginBottom: 2
             }}>
-              Lista de Desejos
+              Desejos
             </Text>
           ),
           headerShown: true,
@@ -275,7 +276,8 @@ const AppNavigator = () => {
         <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Manutenções' }} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notificações' }} />
         <Stack.Screen name="IGDBSearch" component={IGDBSearchScreen} options={{ title: 'Buscar na IGDB' }} />
-        <Stack.Screen name="ApiConfig" component={ApiConfigScreen} options={{ title: 'Configurar API' }} />
+        <Stack.Screen name="ApisConfig" component={ApisConfigScreen} options={{ title: 'Configurar APIs' }} />
+        <Stack.Screen name="ApiConfig" component={ApiConfigScreen} options={{ title: 'API IGDB' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
