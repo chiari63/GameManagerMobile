@@ -192,7 +192,7 @@ export const createBackup = async () => {
       accessories: processedAccessories,
       wishlist: processedWishlist,
       timestamp: new Date().toISOString(),
-      version: '1.2.0', // Atualizamos a versão para indicar suporte a imagens melhorado
+      version: '1.3.0', // Atualizamos a versão para indicar suporte a dados completos do IGDB
     };
 
     // Converte para JSON

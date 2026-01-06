@@ -6,7 +6,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { Gamepad, ArrowLeft, Search, X } from 'lucide-react-native';
 import { commonStyles } from '../theme/commonStyles';
 import { appColors } from '../theme';
-import { searchGames, searchPlatforms } from '../services/igdbApi';
+import { searchGames, searchPlatforms, getGameDetails } from '../services/igdbApi';
 
 // Definição do tipo para os parâmetros da rota
 type RootStackParamList = {
@@ -82,18 +82,42 @@ const IGDBSearchScreen = ({ navigation, route }: IGDBSearchScreenProps) => {
     }
   };
 
-  const handleSelectItem = (item: any) => {
+  const handleSelectItem = async (item: any) => {
     if (searchType === 'game') {
-      const gameData = {
-        name: item.name,
-        genre: item.genres?.length > 0 ? item.genres[0].name : '',
-        releaseYear: item.first_release_date 
-          ? new Date(item.first_release_date * 1000).getFullYear().toString() 
-          : '',
-        imageUrl: item.cover ? getImageUrl(item.cover.image_id, 'cover_big') : '',
-      };
-      
-      if (onSelect) onSelect(gameData);
+      setLoading(true);
+      try {
+        // Buscar detalhes completos do jogo
+        const fullDetails = await getGameDetails(item.id, false);
+        
+        const gameData = {
+          name: item.name,
+          genre: item.genres?.length > 0 ? item.genres[0].name : '',
+          releaseYear: item.first_release_date 
+            ? new Date(item.first_release_date * 1000).getFullYear().toString() 
+            : '',
+          imageUrl: item.cover ? getImageUrl(item.cover.image_id, 'cover_big') : '',
+          igdbId: item.id,
+          igdbData: fullDetails || item, // Incluir dados completos do IGDB
+        };
+        
+        if (onSelect) onSelect(gameData);
+      } catch (error) {
+        console.error('Erro ao buscar detalhes completos do jogo:', error);
+        // Em caso de erro, usar dados básicos
+        const gameData = {
+          name: item.name,
+          genre: item.genres?.length > 0 ? item.genres[0].name : '',
+          releaseYear: item.first_release_date 
+            ? new Date(item.first_release_date * 1000).getFullYear().toString() 
+            : '',
+          imageUrl: item.cover ? getImageUrl(item.cover.image_id, 'cover_big') : '',
+          igdbId: item.id,
+          igdbData: item, // Usar dados básicos em caso de erro
+        };
+        if (onSelect) onSelect(gameData);
+      } finally {
+        setLoading(false);
+      }
     } else {
       const platformData = {
         name: item.name,

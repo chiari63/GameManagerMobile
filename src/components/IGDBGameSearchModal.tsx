@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { Modal, Portal, Text, Searchbar, Button, useTheme } from 'react-native-paper';
 import { Gamepad, Search, X } from 'lucide-react-native';
-import { searchGames } from '../services/igdbApi';
+import { searchGames, getGameDetails } from '../services/igdbApi';
 import { appColors } from '../theme';
 
 // Interface para os dados do jogo
@@ -12,6 +12,7 @@ interface GameData {
   releaseYear: string;
   imageUrl: string;
   igdbId?: number;
+  igdbData?: any; // Dados completos do IGDB
 }
 
 interface IGDBGameSearchModalProps {
@@ -72,23 +73,48 @@ const IGDBGameSearchModal = ({ visible, onClose, onSelect }: IGDBGameSearchModal
     setSearchQuery('');
   };
 
-  const handleSelectItem = (item: any) => {
+  const handleSelectItem = async (item: any) => {
     console.log('Item IGDB selecionado:', item);
     console.log('ID IGDB do jogo:', item.id);
     
-    const gameData: GameData = {
-      name: item.name,
-      genre: item.genres?.length > 0 ? item.genres[0].name : '',
-      releaseYear: item.first_release_date 
-        ? new Date(item.first_release_date * 1000).getFullYear().toString() 
-        : '',
-      imageUrl: item.cover ? getImageUrl(item.cover.image_id, 'cover_big') : '',
-      igdbId: item.id,
-    };
+    setLoading(true);
     
-    console.log('Dados do jogo a serem passados:', gameData);
-    onSelect(gameData);
-    onClose();
+    try {
+      // Buscar detalhes completos do jogo
+      const fullDetails = await getGameDetails(item.id, false);
+      
+      const gameData: GameData = {
+        name: item.name,
+        genre: item.genres?.length > 0 ? item.genres[0].name : '',
+        releaseYear: item.first_release_date 
+          ? new Date(item.first_release_date * 1000).getFullYear().toString() 
+          : '',
+        imageUrl: item.cover ? getImageUrl(item.cover.image_id, 'cover_big') : '',
+        igdbId: item.id,
+        igdbData: fullDetails || item, // Usar detalhes completos se disponível, senão usar o item básico
+      };
+      
+      console.log('Dados do jogo a serem passados:', gameData);
+      onSelect(gameData);
+      onClose();
+    } catch (error) {
+      console.error('Erro ao buscar detalhes completos do jogo:', error);
+      // Em caso de erro, usar os dados básicos
+      const gameData: GameData = {
+        name: item.name,
+        genre: item.genres?.length > 0 ? item.genres[0].name : '',
+        releaseYear: item.first_release_date 
+          ? new Date(item.first_release_date * 1000).getFullYear().toString() 
+          : '',
+        imageUrl: item.cover ? getImageUrl(item.cover.image_id, 'cover_big') : '',
+        igdbId: item.id,
+        igdbData: item, // Usar dados básicos em caso de erro
+      };
+      onSelect(gameData);
+      onClose();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderItem = ({ item }: { item: any }) => {

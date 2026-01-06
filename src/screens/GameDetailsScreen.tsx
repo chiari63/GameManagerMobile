@@ -48,6 +48,7 @@ const GameDetailsScreen = () => {
   const [translatedSummary, setTranslatedSummary] = useState<string | null>(null);
   const [translatedStoryline, setTranslatedStoryline] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
+  const [usingLocalData, setUsingLocalData] = useState(false);
 
   useEffect(() => {
     const fetchConsoleName = async () => {
@@ -63,12 +64,22 @@ const GameDetailsScreen = () => {
     const fetchIGDBDetails = async () => {
       console.log('GameDetailsScreen - Dados do jogo:', JSON.stringify(game));
       
-      if (!game.igdbId) {
-        console.log('Nenhum ID IGDB fornecido para o jogo:', game.name);
+      // Primeiro, verificar se temos dados salvos localmente
+      if (game.igdbData) {
+        console.log('Usando dados IGDB salvos localmente');
+        setIgdbDetails(game.igdbData);
+        setUsingLocalData(true);
         return;
       }
       
-      console.log('Buscando detalhes do jogo com ID:', game.igdbId);
+      // Se não houver dados salvos, buscar da API
+      if (!game.igdbId) {
+        console.log('Nenhum ID IGDB fornecido para o jogo:', game.name);
+        setIgdbDetails(null);
+        return;
+      }
+      
+      console.log('Buscando detalhes do jogo da API com ID:', game.igdbId);
       console.log('Tipo do ID:', typeof game.igdbId);
       
       // Garantir que o ID seja um número
@@ -101,10 +112,11 @@ const GameDetailsScreen = () => {
       }
       
       setLoading(true);
+      setUsingLocalData(false);
       try {
         // Forçar uma nova requisição sem usar o cache
         const details = await getGameDetails(gameId, false);
-        console.log('IGDB Details recebidos:', details ? 'Sim' : 'Não');
+        console.log('IGDB Details recebidos da API:', details ? 'Sim' : 'Não');
         if (details) {
           console.log('IGDB Details ID:', details.id);
           console.log('IGDB Details Nome:', details.name);
@@ -317,24 +329,31 @@ const GameDetailsScreen = () => {
           <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Detalhes da IGDB</Text>
               
-              {igdbDetails && (igdbDetails.summary || igdbDetails.storyline) && (
-                <TouchableOpacity 
-                  style={styles.translateButton}
-                  onPress={handleTranslate}
-                  disabled={translating}
-                >
-                  {translating ? (
-                    <ActivityIndicator size="small" color={appColors.primary} />
-                  ) : (
-                    <>
-                      <Globe size={16} color={appColors.primary} style={styles.translateIcon} />
-                      <Text style={styles.translateButtonText}>
-                        {translatedSummary || translatedStoryline ? 'Traduzido' : 'Traduzir'}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
+              <View style={styles.sectionHeaderRight}>
+                {usingLocalData && (
+                  <View style={styles.localDataBadge}>
+                    <Text style={styles.localDataText}>Dados Locais</Text>
+                  </View>
+                )}
+                {igdbDetails && (igdbDetails.summary || igdbDetails.storyline) && (
+                  <TouchableOpacity 
+                    style={styles.translateButton}
+                    onPress={handleTranslate}
+                    disabled={translating}
+                  >
+                    {translating ? (
+                      <ActivityIndicator size="small" color={appColors.primary} />
+                    ) : (
+                      <>
+                        <Globe size={16} color={appColors.primary} style={styles.translateIcon} />
+                        <Text style={styles.translateButtonText}>
+                          {translatedSummary || translatedStoryline ? 'Traduzido' : 'Traduzir'}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
             
             <Divider style={styles.divider} />
@@ -722,6 +741,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  sectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  localDataBadge: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#22c55e',
+  },
+  localDataText: {
+    color: '#22c55e',
+    fontSize: 11,
+    fontWeight: '600',
   },
   translateButton: {
     flexDirection: 'row',

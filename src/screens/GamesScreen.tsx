@@ -60,6 +60,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
     isPhysical: true,
     imageUrl: '',
     igdbId: undefined as number | undefined,
+    igdbData: undefined as any,
     pricePaid: '',
   });
 
@@ -165,10 +166,11 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
     }
 
     try {
-      // Converter o preço de string para number
+      // Converter o preço de string para number e preparar dados do jogo
       const gameData = {
         ...formData,
-        pricePaid: formData.pricePaid ? parseFloat(formData.pricePaid) : undefined
+        pricePaid: formData.pricePaid ? parseFloat(formData.pricePaid) : undefined,
+        igdbData: formData.igdbData, // Incluir dados completos do IGDB
       };
 
       if (editingGame) {
@@ -213,6 +215,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       isPhysical: game.isPhysical,
       imageUrl: game.imageUrl || '',
       igdbId: game.igdbId,
+      igdbData: game.igdbData, // Carregar dados completos do IGDB
       pricePaid: game.pricePaid ? game.pricePaid.toString() : '',
     });
     setModalVisible(true);
@@ -261,6 +264,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       isPhysical: true,
       imageUrl: '',
       igdbId: undefined as number | undefined,
+      igdbData: undefined as any,
       pricePaid: '',
     });
   };
@@ -522,11 +526,15 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       name: gameData.name || formData.name,
       genre: gameData.genre || formData.genre,
       releaseYear: gameData.releaseYear || formData.releaseYear,
-      imageUrl: gameData.imageUrl || formData.imageUrl,
+      // Manter a imagem existente se já houver, só usar a do IGDB se estiver vazio
+      imageUrl: (formData.imageUrl && formData.imageUrl.trim() !== '') 
+        ? formData.imageUrl 
+        : (gameData.imageUrl || formData.imageUrl),
       igdbId: gameData.igdbId,
+      igdbData: gameData.igdbData, // Salvar dados completos do IGDB
     });
     
-    console.log('FormData atualizado com ID IGDB:', formData);
+    console.log('FormData atualizado com dados IGDB completos:', formData);
   };
 
   return (
