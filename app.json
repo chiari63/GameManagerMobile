@@ -2,7 +2,7 @@
   "expo": {
     "name": "Game Manager",
     "slug": "GameManagerMobile",
-    "version": "1.4.4",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/controle-de-video-game.png",
     "userInterfaceStyle": "dark",
@@ -28,7 +28,9 @@
       "intentFilters": [
         {
           "action": "android.intent.action.MAIN",
-          "category": ["android.intent.category.LAUNCHER"]
+          "category": [
+            "android.intent.category.LAUNCHER"
+          ]
         }
       ]
     },

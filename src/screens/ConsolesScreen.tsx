@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
-import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
+import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
 import { getConsoles, addConsole, updateConsole, deleteConsole } from '../services/storage';
 import { Console } from '../types';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell, Search } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
+import { ItemCard } from '../components/ItemCard';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
@@ -15,7 +16,8 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
 import IGDBConsoleSearchModal from '../components/IGDBConsoleSearchModal';
-import { MainTabParamList } from '../navigation/types';
+import { ConsolesStackParamList, MainTabParamList } from '../navigation/types';
+import type { RouteProp } from '@react-navigation/native';
 
 // Lista de fabricantes disponíveis
 const FABRICANTES = ['Sony', 'Microsoft', 'Nintendo', 'Sega', 'Tectoy', 'Atari', 'Outros'];
@@ -28,9 +30,10 @@ const REGIOES = ['Americano', 'Japonês', 'Brasileiro'];
 
 type ConsolesScreenProps = {
   navigation: BottomTabNavigationProp<MainTabParamList>;
+  route: RouteProp<ConsolesStackParamList, 'ConsolesList'>;
 };
 
-const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
+const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
   const theme = useTheme();
   const { showAlert } = useAlert();
   const [consoles, setConsoles] = useState<Console[]>([]);
@@ -85,7 +88,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível carregar os consoles.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -96,12 +99,22 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
     }, [])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.autoOpenAdd) {
+        setModalVisible(true);
+        // Limpar o parâmetro para não abrir novamente ao voltar
+        navigation.setParams({ autoOpenAdd: undefined } as any);
+      }
+    }, [route.params?.autoOpenAdd])
+  );
+
   useEffect(() => {
     if (searchQuery || filters.brand || filters.model || filters.region) {
       const filtered = consoles.filter(consoleItem => {
         const matchesSearch = consoleItem.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            consoleItem.brand.toLowerCase().includes(searchQuery.toLowerCase());
-        
+          consoleItem.brand.toLowerCase().includes(searchQuery.toLowerCase());
+
         const matchesBrand = !filters.brand || consoleItem.brand === filters.brand;
         const matchesModel = !filters.model || consoleItem.model === filters.model;
         const matchesRegion = !filters.region || consoleItem.region === filters.region;
@@ -137,7 +150,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Por favor, preencha todos os campos obrigatórios.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       return;
     }
@@ -147,7 +160,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'A data de compra deve estar no formato DD/MM/YYYY.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       return;
     }
@@ -157,7 +170,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'A data de manutenção deve estar no formato DD/MM/YYYY.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       return;
     }
@@ -174,14 +187,14 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
         showAlert({
           title: 'Sucesso',
           message: 'Console atualizado com sucesso!',
-          buttons: [{ text: 'OK', onPress: () => {} }]
+          buttons: [{ text: 'OK', onPress: () => { } }]
         });
       } else {
         await addConsole(consoleData);
         showAlert({
           title: 'Sucesso',
           message: 'Console adicionado com sucesso!',
-          buttons: [{ text: 'OK', onPress: () => {} }]
+          buttons: [{ text: 'OK', onPress: () => { } }]
         });
       }
 
@@ -194,7 +207,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível salvar o console.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -225,7 +238,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       showAlert({
         title: 'Sucesso',
         message: 'Console excluído com sucesso!',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       loadConsoles();
     } catch (error) {
@@ -233,7 +246,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível excluir o console.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
     setMenuVisible(null);
@@ -244,7 +257,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
       title: 'Confirmar exclusão',
       message: 'Tem certeza que deseja excluir este console?',
       buttons: [
-        { text: 'Cancelar', onPress: () => {}, style: 'cancel' },
+        { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
         { text: 'Excluir', onPress: () => handleDeleteConsole(id), style: 'destructive' },
       ]
     });
@@ -445,63 +458,78 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
   );
 
   const renderItem = ({ item }: { item: Console }) => (
-    <View style={styles.cardContainer}>
-      <TouchableOpacity onPress={() => handleViewDetails(item)}>
-        <Card style={styles.fixedSizeCard}>
-          {item.imageUrl ? (
-            <Card.Cover
-              source={{ uri: item.imageUrl }}
-              style={styles.cardCover}
-            />
-          ) : (
-            <View style={styles.placeholderCover}>
-              <Gamepad color={appColors.primary} size={32} />
-            </View>
-          )}
-          <Card.Content style={styles.contentPadding}>
-            <View style={styles.cardHeader}>
-              <View style={styles.titleContainer}>
-                <Text style={[commonStyles.itemTitle, styles.cardTitle]} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
-                <Text style={[commonStyles.itemSubtitle, styles.cardSubtitle]} numberOfLines={1} ellipsizeMode="tail">{item.brand}</Text>
-              </View>
-              <Menu
-                visible={menuVisible === item.id}
-                onDismiss={() => setMenuVisible(null)}
-                anchor={
-                  <IconButton
-                    icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
-                    onPress={() => setMenuVisible(item.id)}
-                    size={20}
-                    style={styles.menuIcon}
-                  />
-                }
+    <ItemCard
+      layout="grid"
+      title={item.name}
+      subtitle={item.brand}
+      imageUri={item.imageUrl}
+      placeholderIcon={<Gamepad size={32} color={appColors.primary} />}
+      onPress={() => handleViewDetails(item)}
+      onLongPress={() => {
+        setEditingConsole(item);
+        setMenuVisible(item.id);
+      }}
+      rightElement={
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{
+            backgroundColor: theme.colors.surfaceVariant,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: 8,
+            marginRight: 8,
+          }}>
+            <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
+              {item.model}
+            </Text>
+          </View>
+          <Menu
+            visible={menuVisible === item.id}
+            onDismiss={() => setMenuVisible(null)}
+            anchor={
+              <TouchableOpacity
+                onPress={() => setMenuVisible(item.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Menu.Item 
-                  onPress={() => {
-                    setMenuVisible(null);
-                    handleEditConsole(item);
-                  }} 
-                  title="Editar" 
-                />
-                <Menu.Item 
-                  onPress={() => {
-                    setMenuVisible(null);
-                    confirmDelete(item.id);
-                  }} 
-                  title="Excluir"
-                  titleStyle={{ color: appColors.destructive }}
-                />
-              </Menu>
-            </View>
-            <View style={styles.badgeContainer}>
-              <View style={[commonStyles.badge, styles.smallBadge]}>
-                <Text style={[commonStyles.badgeText, styles.smallBadgeText]}>{item.model}</Text>
-              </View>
-            </View>
-          </Card.Content>
-        </Card>
-      </TouchableOpacity>
-    </View>
+                <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />
+              </TouchableOpacity>
+            }
+          >
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                handleEditConsole(item);
+              }}
+              title="Editar"
+              leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
+            />
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                confirmDelete(item.id);
+              }}
+              title="Excluir"
+              leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
+              titleStyle={{ color: appColors.destructive }}
+            />
+          </Menu>
+        </View>
+      }
+      footer={
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Calendar size={14} color={theme.colors.onSurfaceVariant} />
+            <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12, marginLeft: 4 }}>
+              {item.purchaseDate}
+            </Text>
+          </View>
+          {item.pricePaid && (
+            <Text style={{ color: appColors.accent, fontWeight: 'bold' }}>
+              R$ {item.pricePaid.toFixed(2)}
+            </Text>
+          )}
+        </View>
+      }
+    />
   );
 
   const EmptyState = () => (
@@ -520,7 +548,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
   useEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => navigation.navigate('Home')}
           style={{ marginLeft: 8 }}
         >
@@ -562,9 +590,9 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
             ]}
             onPress={() => setFilterModalVisible(true)}
           >
-            <SlidersHorizontal 
-              color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant} 
-              size={20} 
+            <SlidersHorizontal
+              color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant}
+              size={20}
             />
             {activeFiltersCount > 0 && (
               <View style={styles.filterBadge}>
@@ -606,7 +634,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
             <Text style={commonStyles.modalTitle}>
               {editingConsole ? 'Editar Console' : 'Novo Console'}
             </Text>
-            
+
             <View style={commonStyles.formGroup}>
               <Text style={commonStyles.label}>Nome do Console</Text>
               <TextInput
@@ -831,7 +859,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
                       showAlert({
                         title: 'Permissão de Notificação',
                         message: 'Para receber lembretes de manutenção, é necessário permitir notificações nas configurações do aplicativo.',
-                        buttons: [{ text: 'OK', onPress: () => {} }]
+                        buttons: [{ text: 'OK', onPress: () => { } }]
                       });
                     }
                   }
@@ -883,7 +911,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
                         showAlert({
                           title: 'Permissão necessária',
                           message: 'Precisamos de acesso à sua galeria para selecionar uma imagem.',
-                          buttons: [{ text: 'OK', onPress: () => {} }]
+                          buttons: [{ text: 'OK', onPress: () => { } }]
                         });
                         return;
                       }
@@ -910,7 +938,7 @@ const ConsolesScreen = ({ navigation }: ConsolesScreenProps) => {
                       showAlert({
                         title: 'Erro',
                         message: 'Não foi possível selecionar a imagem.',
-                        buttons: [{ text: 'OK', onPress: () => {} }]
+                        buttons: [{ text: 'OK', onPress: () => { } }]
                       });
                     }
                   }}
@@ -967,71 +995,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 8,
   },
-  cardContainer: {
-    width: '48%',
-    marginHorizontal: 4,
-    marginBottom: 16,
-  },
-  fixedSizeCard: {
-    flex: 0,
-    width: '100%',
-    overflow: 'hidden',
-  },
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
   },
-  titleContainer: {
-    flex: 1,
-    marginRight: 4,
-    minHeight: 42,
-  },
-  cardTitle: {
-    fontSize: 14,
-    lineHeight: 18,
-    marginBottom: 4,
-    height: 36,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  cardCover: {
-    height: 140,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  placeholderCover: {
-    height: 140,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  contentPadding: {
-    paddingTop: 12,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  infoContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 12,
-  },
+
   infoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 2,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  badge: {
+    backgroundColor: 'rgba(37, 99, 235, 0.15)', // Primary color opacity
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: '600',
   },
   infoLabel: {
     color: '#94a3b8',
@@ -1130,7 +1115,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    aspectRatio: 4/3,
+    aspectRatio: 4 / 3,
   },
   imageUploaderText: {
     color: '#94a3b8',
@@ -1148,7 +1133,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderRadius: 12,
     overflow: 'hidden',
-    aspectRatio: 4/3,
+    aspectRatio: 4 / 3,
   },
   imagePreview: {
     width: '100%',

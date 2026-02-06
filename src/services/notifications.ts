@@ -14,6 +14,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -67,30 +69,28 @@ export const scheduleMaintenanceNotification = async (
   try {
     // Cancelar notificações existentes para este item
     await cancelMaintenanceNotification(itemId);
-    
+
     // Converter a data de próxima manutenção para um objeto Date usando parsing robusto
     const nextDate = parseBrazilianDate(nextMaintenanceDate);
     nextDate.setHours(0, 0, 0, 0);
-    
+
     // Obter a data atual e definir para o início do dia
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    
+
     // Calcular a diferença em dias
     const diffTime = nextDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     appLog.debug(`Scheduling notification for ${itemName} (${itemType}). Next maintenance in ${diffDays} days.`);
-    
+
     const notificationIds: string[] = [];
-    
-    // Agendar notificações progressivas
+
+    // Agendar notificações progressivas (30, 15, 5 e 0 dias)
     const notificationTimes = [
       { days: 30, title: 'Lembrete de Manutenção', body: `A manutenção de ${itemName} está programada para daqui a 30 dias.` },
-      { days: 14, title: 'Lembrete de Manutenção', body: `A manutenção de ${itemName} está programada para daqui a 14 dias.` },
-      { days: 7, title: 'Lembrete de Manutenção', body: `A manutenção de ${itemName} está programada para daqui a 7 dias.` },
-      { days: 3, title: 'Manutenção Próxima', body: `A manutenção de ${itemName} está próxima! Restam apenas 3 dias.` },
-      { days: 1, title: 'Manutenção Amanhã', body: `A manutenção de ${itemName} está agendada para amanhã!` },
+      { days: 15, title: 'Lembrete de Manutenção', body: `A manutenção de ${itemName} está programada para daqui a 15 dias.` },
+      { days: 5, title: 'Manutenção Próxima', body: `A manutenção de ${itemName} está próxima! Restam apenas 5 dias.` },
       { days: 0, title: 'Manutenção Hoje', body: `Hoje é o dia programado para a manutenção de ${itemName}!` }
     ];
 
@@ -99,7 +99,7 @@ export const scheduleMaintenanceNotification = async (
         const notificationDate = new Date(nextDate);
         notificationDate.setDate(nextDate.getDate() - notification.days);
         notificationDate.setHours(9, 0, 0, 0); // Notificação às 9h da manhã
-        
+
         // Verificar se a data é no futuro
         if (notificationDate > now) {
           const notificationId = await Notifications.scheduleNotificationAsync({
@@ -118,10 +118,10 @@ export const scheduleMaintenanceNotification = async (
               channelId: 'maintenance-reminders',
             },
           });
-          
+
           notificationIds.push(notificationId);
           appLog.debug(`Notification scheduled for ${notification.days} days before: ${notificationDate.toISOString()}`);
-          
+
           // Salvar no histórico
           await saveNotificationToHistory({
             id: notificationId,
@@ -142,7 +142,7 @@ export const scheduleMaintenanceNotification = async (
       const overdueDate = new Date(now);
       overdueDate.setDate(now.getDate() + 1); // Amanhã às 9h
       overdueDate.setHours(9, 0, 0, 0);
-      
+
       const overdueNotificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Manutenção Atrasada',
@@ -159,15 +159,120 @@ export const scheduleMaintenanceNotification = async (
           channelId: 'maintenance-reminders',
         },
       });
-      
+
       notificationIds.push(overdueNotificationId);
       appLog.debug(`Overdue notification scheduled: ${overdueDate.toISOString()}`);
     }
-    
+
     return notificationIds;
   } catch (error) {
     appLog.error('Error scheduling maintenance notification:', error);
     return [];
+  }
+};
+
+/**
+ * Re-agenda todas as notificações de manutenção para todos os consoles e acessórios.
+ * Útil após a restauração de um backup.
+ */
+export const rescheduleAllNotifications = async (
+  consoles: Console[],
+  accessories: Accessory[]
+): Promise<void> => {
+  try {
+    appLog.info('Iniciando reagendamento de todas as notificações...');
+
+    // 1. Cancelar todas as notificações agendadas para começar do zero
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    appLog.debug('Todas as notificações agendadas foram canceladas');
+
+    // 2. Agendar para consoles
+    for (const consoleItem of consoles) {
+      if (consoleItem.notifyMaintenance && consoleItem.nextMaintenanceDate) {
+        await scheduleMaintenanceNotification(
+          consoleItem.id,
+          consoleItem.name,
+          'console',
+          consoleItem.nextMaintenanceDate
+        );
+      }
+    }
+
+    // 3. Agendar para acessórios
+    for (const accessory of accessories) {
+      if (accessory.notifyMaintenance && accessory.nextMaintenanceDate) {
+        await scheduleMaintenanceNotification(
+          accessory.id,
+          accessory.name,
+          'accessory',
+          accessory.nextMaintenanceDate
+        );
+      }
+    }
+
+    appLog.info('Reagendamento de notificações concluído com sucesso');
+  } catch (error) {
+    appLog.error('Erro ao reagendar notificações:', error);
+  }
+};
+
+/**
+ * Verifica se existem manutenções atrasadas e envia uma notificação de lembrete imediata.
+ * Chamada na entrada do app (HomeScreen).
+ */
+export const checkAndNotifyOverdue = async (
+  consoles: Console[],
+  accessories: Accessory[]
+): Promise<void> => {
+  try {
+    const overdueItems: string[] = [];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    // Verificar consoles
+    consoles.forEach(c => {
+      if (c.nextMaintenanceDate) {
+        const nextDate = parseBrazilianDate(c.nextMaintenanceDate);
+        nextDate.setHours(0, 0, 0, 0);
+        if (nextDate < now) {
+          overdueItems.push(c.name);
+        }
+      }
+    });
+
+    // Verificar acessórios
+    accessories.forEach(a => {
+      if (a.nextMaintenanceDate) {
+        const nextDate = parseBrazilianDate(a.nextMaintenanceDate);
+        nextDate.setHours(0, 0, 0, 0);
+        if (nextDate < now) {
+          overdueItems.push(a.name);
+        }
+      }
+    });
+
+    if (overdueItems.length > 0) {
+      appLog.info(`Encontrados ${overdueItems.length} itens com manutenção atrasada. Enviando notificação local...`);
+
+      const title = overdueItems.length === 1
+        ? 'Manutenção Atrasada'
+        : 'Múltiplas Manutenções Atrasadas';
+
+      const body = overdueItems.length === 1
+        ? `A manutenção de ${overdueItems[0]} está atrasada. Realize-a o quanto antes!`
+        : `Você tem ${overdueItems.length} itens com manutenção atrasada. Confira sua coleção!`;
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: { type: 'overdue_nudge_summary' },
+        },
+        trigger: null, // Disparar imediatamente
+      });
+    }
+  } catch (error) {
+    appLog.error('Erro ao verificar manutenções atrasadas:', error);
   }
 };
 
@@ -176,7 +281,7 @@ export const cancelMaintenanceNotification = async (itemId: string): Promise<voi
   try {
     // Obter todas as notificações agendadas
     const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
-    
+
     // Encontrar notificações relacionadas a este item
     for (const notification of scheduledNotifications) {
       const data = notification.content.data as any;
@@ -190,10 +295,10 @@ export const cancelMaintenanceNotification = async (itemId: string): Promise<voi
 };
 
 // Função auxiliar para parsing robusto de datas
-const parseBrazilianDate = (dateString: string): Date => {
+export const parseBrazilianDate = (dateString: string): Date => {
   try {
     appLog.debug(`Parsing date: ${dateString}`);
-    
+
     // Verificar se a data está no formato DD/MM/YYYY
     if (dateString.includes('/')) {
       const parts = dateString.split('/');
@@ -201,7 +306,7 @@ const parseBrazilianDate = (dateString: string): Date => {
         const day = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10);
         const year = parseInt(parts[2], 10);
-        
+
         // Validar se os números são válidos
         if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
           // Criar data no timezone local para evitar problemas de UTC
@@ -211,14 +316,14 @@ const parseBrazilianDate = (dateString: string): Date => {
         }
       }
     }
-    
+
     // Tentar parsear como ISO
     const isoDate = new Date(dateString);
     if (!isNaN(isoDate.getTime())) {
       appLog.debug(`ISO date parsed: ${isoDate.toISOString()}`);
       return isoDate;
     }
-    
+
     throw new Error(`Formato de data inválido: ${dateString}`);
   } catch (error) {
     appLog.error(`Error parsing date: ${dateString}`, error);
@@ -246,11 +351,11 @@ export const calculateNextMaintenanceDate = (
 
   try {
     appLog.debug(`Calculating next maintenance for: ${lastMaintenanceDate}, interval: ${maintenanceInterval} months`);
-    
+
     const lastDate = parseBrazilianDate(lastMaintenanceDate);
     const nextDate = new Date(lastDate);
     nextDate.setMonth(nextDate.getMonth() + maintenanceInterval);
-    
+
     const result = formatBrazilianDate(nextDate);
     appLog.debug(`Next maintenance calculated: ${result}`);
     return result;
@@ -277,26 +382,26 @@ export const getUpcomingMaintenanceItems = (
   }
 
   const items: MaintenanceItem[] = [];
-  
+
   // Definir a data atual para o início do dia
   const currentDate = new Date();
   currentDate.setHours(0, 0, 0, 0);
-  
+
   appLog.debug(`Checking maintenance items for date: ${currentDate.toISOString()}`);
-  
+
   // Função auxiliar para determinar se um item deve ser incluído
   const shouldIncludeItem = (diffDays: number): boolean => {
-    // Incluir itens que estão próximos da manutenção (próximos 30 dias) ou atrasados
-    return diffDays <= 30; // Mostrar todos os itens com manutenção nos próximos 30 dias ou atrasados
+    // Incluir apenas itens que estão nos próximos 30 dias (não atrasados para esta lista)
+    return diffDays >= 0 && diffDays <= 30;
   };
-  
+
   // Usar a função robusta de parsing que já criamos
   const parseDate = (dateString: string): Date => {
     const date = parseBrazilianDate(dateString);
     date.setHours(0, 0, 0, 0);
     return date;
   };
-  
+
   // Processar consoles
   try {
     appLog.debug(`Processing ${consoles.length} consoles for maintenance`);
@@ -306,7 +411,7 @@ export const getUpcomingMaintenanceItems = (
           const nextDate = parseDate(consoleItem.nextMaintenanceDate);
           const diffTime = nextDate.getTime() - currentDate.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          
+
           if (shouldIncludeItem(diffDays)) {
             appLog.debug(`Including console ${consoleItem.name} in maintenance list (${diffDays} days remaining)`);
             items.push({
@@ -326,7 +431,7 @@ export const getUpcomingMaintenanceItems = (
   } catch (error) {
     appLog.error('Error processing consoles:', error instanceof Error ? error.message : 'Unknown error');
   }
-  
+
   // Processar acessórios
   try {
     appLog.debug(`Processing ${accessories.length} accessories for maintenance`);
@@ -336,7 +441,7 @@ export const getUpcomingMaintenanceItems = (
           const nextDate = parseDate(accessory.nextMaintenanceDate);
           const diffTime = nextDate.getTime() - currentDate.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          
+
           if (shouldIncludeItem(diffDays)) {
             appLog.debug(`Including accessory ${accessory.name} in maintenance list (${diffDays} days remaining)`);
             items.push({
@@ -361,14 +466,81 @@ export const getUpcomingMaintenanceItems = (
   // Ordenar por dias restantes (mais urgentes primeiro)
   const sortedItems = items.sort((a, b) => a.daysRemaining - b.daysRemaining);
   appLog.debug(`Total maintenance items found: ${sortedItems.length}`);
-  
+
   // Atualizar cache
   maintenanceItemsCache = {
     items: sortedItems,
     timestamp: now
   };
-  
+
   return sortedItems;
+};
+
+/**
+ * Obtém todos os itens com manutenção atrasada.
+ */
+export const getOverdueMaintenanceItems = (
+  consoles: Console[],
+  accessories: Accessory[]
+): MaintenanceItem[] => {
+  const overdueItems: MaintenanceItem[] = [];
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  // Processar consoles
+  consoles.forEach(consoleItem => {
+    if (consoleItem.nextMaintenanceDate) {
+      try {
+        const nextDate = parseBrazilianDate(consoleItem.nextMaintenanceDate);
+        nextDate.setHours(0, 0, 0, 0);
+
+        if (nextDate < now) {
+          const diffTime = nextDate.getTime() - now.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          overdueItems.push({
+            id: consoleItem.id,
+            name: consoleItem.name,
+            type: 'console',
+            nextMaintenanceDate: consoleItem.nextMaintenanceDate,
+            daysRemaining: diffDays,
+            lastMaintenanceDate: consoleItem.lastMaintenanceDate
+          });
+        }
+      } catch (e) {
+        appLog.error(`Erro ao processar console atrasado ${consoleItem.id}:`, e);
+      }
+    }
+  });
+
+  // Processar acessórios
+  accessories.forEach(accessory => {
+    if (accessory.nextMaintenanceDate) {
+      try {
+        const nextDate = parseBrazilianDate(accessory.nextMaintenanceDate);
+        nextDate.setHours(0, 0, 0, 0);
+
+        if (nextDate < now) {
+          const diffTime = nextDate.getTime() - now.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          overdueItems.push({
+            id: accessory.id,
+            name: accessory.name,
+            type: 'accessory',
+            itemType: accessory.type,
+            nextMaintenanceDate: accessory.nextMaintenanceDate,
+            daysRemaining: diffDays,
+            lastMaintenanceDate: accessory.lastMaintenanceDate
+          });
+        }
+      } catch (e) {
+        appLog.error(`Erro ao processar acessório atrasado ${accessory.id}:`, e);
+      }
+    }
+  });
+
+  return overdueItems.sort((a, b) => a.daysRemaining - b.daysRemaining);
 };
 
 // Limpar cache de itens de manutenção
@@ -382,16 +554,16 @@ export const saveNotificationToHistory = async (notification: Notification): Pro
   try {
     // Obter histórico atual
     const history = await getNotificationHistory();
-    
+
     // Adicionar nova notificação
     history.unshift(notification); // Adicionar no início da lista
-    
+
     // Limitar o histórico a 50 notificações
     const limitedHistory = history.slice(0, 50);
-    
+
     // Salvar histórico atualizado
     await AsyncStorage.setItem(NOTIFICATIONS_HISTORY_KEY, JSON.stringify(limitedHistory));
-    
+
     appLog.debug(`Notification saved to history: ${notification.title}`);
   } catch (error) {
     appLog.error('Error saving notification to history:', error);
@@ -416,13 +588,13 @@ export const getNotificationHistory = async (): Promise<Notification[]> => {
 export const markNotificationAsRead = async (notificationId: string): Promise<void> => {
   try {
     const history = await getNotificationHistory();
-    
-    const updatedHistory = history.map(notification => 
-      notification.id === notificationId 
-        ? { ...notification, read: true } 
+
+    const updatedHistory = history.map(notification =>
+      notification.id === notificationId
+        ? { ...notification, read: true }
         : notification
     );
-    
+
     await AsyncStorage.setItem(NOTIFICATIONS_HISTORY_KEY, JSON.stringify(updatedHistory));
     appLog.debug(`Notification ${notificationId} marked as read`);
   } catch (error) {
@@ -434,9 +606,9 @@ export const markNotificationAsRead = async (notificationId: string): Promise<vo
 export const markAllNotificationsAsRead = async (): Promise<void> => {
   try {
     const history = await getNotificationHistory();
-    
+
     const updatedHistory = history.map(notification => ({ ...notification, read: true }));
-    
+
     await AsyncStorage.setItem(NOTIFICATIONS_HISTORY_KEY, JSON.stringify(updatedHistory));
     appLog.debug('All notifications marked as read');
   } catch (error) {

@@ -3,7 +3,6 @@ import { Game, Console, Accessory } from '../types';
 // Definição dos tipos para as pilhas de navegação
 export type MainTabParamList = {
   ConsolesStack: undefined;
-  AccessoriesStack: undefined;
   GamesStack: undefined;
   Home: undefined;
   Wishlist: undefined;
@@ -15,39 +14,33 @@ export type MainTabParamList = {
 };
 
 export type RootStackParamList = {
+  Onboarding: undefined;
   MainTabs: undefined;
   Games: undefined;
   GameDetails: { id: string };
   Consoles: undefined;
   ConsoleDetails: { id: string };
-  Accessories: undefined;
+  Accessories: { autoOpenAdd?: boolean };
   AccessoryDetails: { id: string };
   Maintenance: undefined;
   Notifications: undefined;
   ApisConfig: undefined;
   ApiConfig: undefined;
-  IGDBSearch: { 
+  IGDBSearch: {
     onSelect: (data: any) => void;
     searchType: 'game' | 'platform';
   };
 };
 
 export type ConsolesStackParamList = {
-  ConsolesList: undefined;
+  ConsolesList: { autoOpenAdd?: boolean };
   ConsoleDetails: {
     console: Console;
   };
 };
 
-export type AccessoriesStackParamList = {
-  AccessoriesList: undefined;
-  AccessoryDetails: {
-    accessory: Accessory;
-  };
-};
-
 export type GamesStackParamList = {
-  GamesList: undefined;
+  GamesList: { autoOpenAdd?: boolean };
   GameDetails: {
     game: Game;
   };

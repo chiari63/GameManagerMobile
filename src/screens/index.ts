@@ -10,4 +10,5 @@ export { default as MaintenanceScreen } from './MaintenanceScreen';
 export { default as NotificationsScreen } from './NotificationsScreen';
 export { default as IGDBSearchScreen } from './IGDBSearchScreen';
 export { default as ApisConfigScreen } from './ApisConfigScreen';
-export { default as ApiConfigScreen } from './ApiConfigScreen'; 
+export { default as ApiConfigScreen } from './ApiConfigScreen';
+export { default as OnboardingScreen } from './OnboardingScreen'; 

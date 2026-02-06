@@ -5,31 +5,31 @@ const colors = {
   // Cores primárias
   primary: '#4a9bff', // Azul mais claro usado nos ícones e elementos interativos
   secondary: '#3b82f6', // Azul secundário
-  
+
   // Cores de fundo e texto
-  background: '#0a0e1a', // Fundo muito escuro (quase preto) com tom azulado
+  background: '#121212', // Fundo preto/cinza muito escuro (Material Design dark theme background)
   foreground: '#ffffff', // Texto branco
-  
+
   // Cores de cartões
-  card: '#121a2b', // Fundo dos cards um pouco mais claro que o background
+  card: '#27272a', // Zinc-800, cinza escuro para cards
   cardForeground: '#ffffff', // Texto dos cards em branco
-  
+
   // Cores de destaque
-  accent: '#1e293b', // Cor de destaque para elementos secundários
+  accent: '#27272a', // Cor de destaque para elementos secundários
   accentForeground: '#ffffff', // Texto sobre elementos de destaque
-  
+
   // Cores de alerta/erro
   destructive: '#f43f5e', // Vermelho para alertas/erros
   destructiveForeground: '#fafafa', // Texto sobre alertas
-  
+
   // Cores de elementos de interface
-  muted: '#121a2b', // Elementos com menor destaque
+  muted: '#27272a', // Elementos com menor destaque
   mutedForeground: '#94a3b8', // Texto com menor destaque
-  
+
   // Cores de borda e entrada
-  border: '#1e293b', // Cor das bordas
-  input: '#1e293b', // Cor de fundo dos inputs
-  
+  border: '#3f3f46', // Zinc-700
+  input: '#27272a', // Zinc-800
+
   // Cores para gráficos (baseadas nos gráficos da imagem)
   chartColors: [
     '#4a9bff', // Azul (35%)
@@ -47,31 +47,31 @@ const lightColors = {
   // Cores primárias
   primary: '#3b82f6', // Azul primário mais escuro para contraste
   secondary: '#2563eb', // Azul secundário mais escuro
-  
+
   // Cores de fundo e texto
   background: '#f8fafc', // Fundo claro
   foreground: '#0f172a', // Texto escuro
-  
+
   // Cores de cartões
   card: '#ffffff', // Fundo dos cards branco
   cardForeground: '#0f172a', // Texto dos cards escuro
-  
+
   // Cores de destaque
   accent: '#e2e8f0', // Cor de destaque para elementos secundários
   accentForeground: '#0f172a', // Texto sobre elementos de destaque
-  
+
   // Cores de alerta/erro
   destructive: '#e11d48', // Vermelho para alertas/erros
   destructiveForeground: '#ffffff', // Texto sobre alertas
-  
+
   // Cores de elementos de interface
   muted: '#f1f5f9', // Elementos com menor destaque
   mutedForeground: '#64748b', // Texto com menor destaque
-  
+
   // Cores de borda e entrada
   border: '#e2e8f0', // Cor das bordas
   input: '#f1f5f9', // Cor de fundo dos inputs
-  
+
   // Cores para gráficos (mantidas do tema escuro)
   chartColors: colors.chartColors,
 };

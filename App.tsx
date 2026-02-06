@@ -11,6 +11,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import Constants from 'expo-constants';
 import { AlertProvider } from './src/contexts/AlertContext';
 import { ValuesVisibilityProvider } from './src/contexts/ValuesVisibilityContext';
+import { AuthProvider } from './src/contexts/AuthContext';
 
 // Log inicial do ambiente (apenas em desenvolvimento)
 if (__DEV__) {
@@ -39,6 +40,7 @@ SplashScreen.preventAutoHideAsync()
 // Desabilitar warnings específicos
 LogBox.ignoreLogs([
   'Non-serializable values were found in the navigation state',
+  'expo-notifications: Android Push notifications',
 ]);
 
 // Configurar o React Query com configurações mais conservadoras
@@ -58,7 +60,7 @@ const queryClient = new QueryClient({
 
 function onAppStateChange(status: AppStateStatus) {
   console.log('[App] Estado do app mudou para:', status);
-  
+
   if (Platform.OS === 'android') {
     focusManager.setFocused(status === 'active');
   } else {
@@ -76,7 +78,7 @@ export default function App() {
       console.log('[App] Tentando esconder splash screen');
       await Promise.race([
         SplashScreen.hideAsync(),
-        new Promise((_, reject) => 
+        new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Timeout ao esconder splash screen')), SPLASH_SCREEN_TIMEOUT)
         )
       ]);
@@ -93,7 +95,7 @@ export default function App() {
     async function prepare() {
       try {
         console.log('[App] Iniciando preparação do app');
-        
+
         // Verificar se todos os componentes necessários estão carregados
         console.log('[App] Verificando componentes:', {
           navigation: !!Navigation,
@@ -101,15 +103,15 @@ export default function App() {
           paperProvider: !!PaperProvider,
           theme: !!darkTheme
         });
-        
+
         // Adicionar aqui qualquer inicialização necessária
         await Promise.race([
           new Promise(resolve => setTimeout(resolve, 1000)),
-          new Promise((_, reject) => 
+          new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Timeout na preparação')), SPLASH_SCREEN_TIMEOUT)
           )
         ]);
-        
+
         console.log('[App] Preparação concluída');
         setAppIsReady(true);
       } catch (error) {
@@ -164,14 +166,16 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <PaperProvider theme={darkTheme}>
           <SafeAreaProvider>
-            <AlertProvider>
-              <ValuesVisibilityProvider>
-                <View onLayout={onLayoutRootView} style={{ flex: 1 }}>
-                  <Navigation />
-                  <StatusBar style="light" />
-                </View>
-              </ValuesVisibilityProvider>
-            </AlertProvider>
+            <AuthProvider>
+              <AlertProvider>
+                <ValuesVisibilityProvider>
+                  <View onLayout={onLayoutRootView} style={{ flex: 1 }}>
+                    <Navigation />
+                    <StatusBar style="light" />
+                  </View>
+                </ValuesVisibilityProvider>
+              </AlertProvider>
+            </AuthProvider>
           </SafeAreaProvider>
         </PaperProvider>
       </QueryClientProvider>

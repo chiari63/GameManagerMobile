@@ -85,6 +85,15 @@ export interface WishlistItem {
   description?: string;
   priority?: 'baixa' | 'média' | 'alta';
   estimatedPrice?: number;
+  imageUrl?: string;
+}
+
+export interface SearchItem {
+  id: string;
+  name: string;
+  type: 'game' | 'console' | 'accessory';
+  image?: string;
+  originalItem: any;
 }
 
 export interface StorageData {

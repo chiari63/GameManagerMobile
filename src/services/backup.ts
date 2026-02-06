@@ -2,8 +2,10 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getConsoles, getGames, getAccessories, getWishlistItems } from './storage';
+import { getConsoles, getGames, getAccessories, getWishlistItems, clearMemoryCache } from './storage';
 import { StorageData } from '../types';
+import { STORAGE_KEYS } from '../constants/storage';
+import { rescheduleAllNotifications } from './notifications';
 
 // Implementação simplificada do EventEmitter
 class EventEmitter {
@@ -41,7 +43,7 @@ const STORAGE_KEY = '@GameManager:data';
 const imageToBase64 = async (uri: string): Promise<string | undefined> => {
   try {
     if (!uri) return undefined;
-    
+
     // Verificar se é uma URL remota
     if (uri.startsWith('http://') || uri.startsWith('https://')) {
       try {
@@ -54,7 +56,7 @@ const imageToBase64 = async (uri: string): Promise<string | undefined> => {
         return undefined;
       }
     }
-    
+
     // Para arquivos locais, continua com a leitura normal
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
@@ -87,7 +89,7 @@ const base64ToImage = async (base64: string, itemId: string = 'default'): Promis
 // Função para processar imagens dos itens
 const processItemsWithImages = async (items: any[]): Promise<any[]> => {
   const processedItems = [];
-  
+
   for (const item of items) {
     if (item.imageUrl) {
       try {
@@ -107,7 +109,7 @@ const processItemsWithImages = async (items: any[]): Promise<any[]> => {
     // Se não tiver imagem ou ocorrer erro, adiciona o item sem modificações
     processedItems.push({ ...item, imageUrl: undefined });
   }
-  
+
   return processedItems;
 };
 
@@ -120,17 +122,17 @@ const restoreItemsWithImages = async (items: any[]): Promise<any[]> => {
     } else {
       const files = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
       const imageFiles = files.filter(file => file.endsWith('.jpg'));
-      
+
       console.log(`Encontradas ${imageFiles.length} imagens antigas para limpar`);
-      
+
       // Não vamos excluir as imagens antigas ainda, apenas registrar que existem
     }
   } catch (error) {
     console.error('Erro ao listar diretório de imagens:', error);
   }
-  
+
   const restoredItems = [];
-  
+
   for (const item of items) {
     // Verificar se o item tem uma imagem em base64 válida
     if (item.imageBase64 && typeof item.imageBase64 === 'string' && item.id) {
@@ -151,7 +153,7 @@ const restoreItemsWithImages = async (items: any[]): Promise<any[]> => {
     // Se não tiver imagem em base64 ou ocorrer erro, adiciona o item sem imagem
     restoredItems.push({ ...item, imageBase64: undefined, imageUrl: undefined });
   }
-  
+
   return restoredItems;
 };
 
@@ -163,6 +165,12 @@ export const createBackup = async () => {
       getGames(),
       getAccessories(),
       getWishlistItems(),
+    ]);
+
+    // Coleta preferências e tema (usando as chaves do constants/storage)
+    const [preferences, themeMode] = await Promise.all([
+      AsyncStorage.getItem(STORAGE_KEYS.USER_PREFERENCES),
+      AsyncStorage.getItem(STORAGE_KEYS.THEME_MODE),
     ]);
 
     console.log('Dados coletados para backup:', {
@@ -191,8 +199,10 @@ export const createBackup = async () => {
       games: processedGames,
       accessories: processedAccessories,
       wishlist: processedWishlist,
+      preferences: preferences ? JSON.parse(preferences) : undefined,
+      themeMode: themeMode,
       timestamp: new Date().toISOString(),
-      version: '1.3.0', // Atualizamos a versão para indicar suporte a dados completos do IGDB
+      version: '1.4.0', // Atualizado para incluir preferências e tema
     };
 
     // Converte para JSON
@@ -261,10 +271,10 @@ export const restoreBackup = async () => {
     }
 
     // Valida se todos os arrays necessários existem
-    if (!Array.isArray(backupData.consoles) || 
-        !Array.isArray(backupData.games) || 
-        !Array.isArray(backupData.accessories) || 
-        !Array.isArray(backupData.wishlist)) {
+    if (!Array.isArray(backupData.consoles) ||
+      !Array.isArray(backupData.games) ||
+      !Array.isArray(backupData.accessories) ||
+      !Array.isArray(backupData.wishlist)) {
       throw new Error('Arquivo de backup com estrutura inválida');
     }
 
@@ -292,6 +302,9 @@ export const restoreBackup = async () => {
     // Restaura os dados usando a mesma chave do storage
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(storageData));
 
+    // Limpa o cache de memória para garantir que os novos dados sejam carregados
+    clearMemoryCache();
+
     // Verifica se os dados foram salvos corretamente
     const restoredData = await AsyncStorage.getItem(STORAGE_KEY);
     const parsedData = JSON.parse(restoredData || '{"consoles":[],"games":[],"accessories":[],"wishlist":[]}');
@@ -303,9 +316,22 @@ export const restoreBackup = async () => {
       wishlist: parsedData.wishlist.length
     });
 
+    // Restaura preferências e tema se existirem no backup
+    if (backupData.preferences) {
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_PREFERENCES, JSON.stringify(backupData.preferences));
+    }
+    if (backupData.themeMode) {
+      await AsyncStorage.setItem(STORAGE_KEYS.THEME_MODE, backupData.themeMode);
+    }
+
     // Emite o evento de restauração completa
     backupEventEmitter.emit(BACKUP_EVENTS.RESTORE_COMPLETED);
     console.log('Evento de restauração emitido');
+
+    // Re-agenda todas as notificações após a restauração
+    console.log('Iniciando reagendamento de notificações...');
+    await rescheduleAllNotifications(restoredConsoles, restoredAccessories);
+    console.log('Notificações reagendadas com sucesso');
 
     return true;
   } catch (error: any) {

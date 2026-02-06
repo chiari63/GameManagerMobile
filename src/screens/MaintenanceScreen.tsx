@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Text, Card, Divider, useTheme, IconButton, Button } from 'react-native-paper';
 import { getConsoles, getAccessories, updateConsole, updateAccessory } from '../services/storage';
-import { getUpcomingMaintenanceItems, clearMaintenanceItemsCache } from '../services/notifications';
+import { getUpcomingMaintenanceItems, getOverdueMaintenanceItems, clearMaintenanceItemsCache } from '../services/notifications';
 import { MaintenanceItem } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
@@ -17,7 +17,6 @@ type MainTabParamList = {
   Home: undefined;
   Games: undefined;
   ConsolesStack: undefined;
-  AccessoriesStack: undefined;
   Wishlist: undefined;
 };
 
@@ -44,64 +43,25 @@ const MaintenanceScreen = () => {
       appLog.debug('Loading consoles and accessories...');
       const consoles = await getConsoles();
       const accessories = await getAccessories();
-      
+
       appLog.debug(`Data loaded: ${consoles.length} consoles, ${accessories.length} accessories`);
-      
-      // Obter itens com manutenção nos próximos dias
+
+      // Obter itens com manutenção nos próximos dias (30 dias)
       const upcoming = getUpcomingMaintenanceItems(consoles, accessories);
-      
-      // Separar itens com manutenção atrasada (dias restantes < 0)
-      const now = new Date();
-      const overdue: MaintenanceItem[] = [];
-      const upcomingFiltered: MaintenanceItem[] = [];
-      
-      // Verificar todos os itens que têm data de próxima manutenção
-      [...consoles, ...accessories].forEach(item => {
-        if (item.nextMaintenanceDate) {
-          try {
-            const nextDate = new Date(item.nextMaintenanceDate);
-            const diffTime = nextDate.getTime() - now.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            // Determinar o tipo do item de forma mais segura
-            const isConsole = 'brand' in item; // Consoles têm a propriedade 'brand'
-            const type = isConsole ? 'console' : 'accessory';
-            
-            if (diffDays < 0) {
-              // Item com manutenção atrasada
-              overdue.push({
-                id: item.id,
-                name: item.name,
-                type: type,
-                itemType: !isConsole && 'type' in item ? item.type : undefined,
-                nextMaintenanceDate: item.nextMaintenanceDate,
-                daysRemaining: diffDays,
-                lastMaintenanceDate: item.lastMaintenanceDate
-              });
-            }
-          } catch (dateError) {
-            console.error(`Erro ao processar data de manutenção para o item ${item.id}:`, dateError);
-          }
-        }
-      });
-      
-      // Filtrar itens que não estão atrasados para a lista de próximos
-      upcoming.forEach(item => {
-        if (item.daysRemaining >= 0) {
-          upcomingFiltered.push(item);
-        }
-      });
-      
-      appLog.debug(`Items processed: ${upcomingFiltered.length} upcoming, ${overdue.length} overdue`);
-      
-      setUpcomingItems(upcomingFiltered);
+
+      // Obter itens com manutenção atrasada
+      const overdue = getOverdueMaintenanceItems(consoles, accessories);
+
+      appLog.debug(`Items processed: ${upcoming.length} upcoming, ${overdue.length} overdue`);
+
+      setUpcomingItems(upcoming);
       setOverdueItems(overdue);
     } catch (error) {
       appLog.error('Error loading maintenance items:', error);
       showAlert({
         title: 'Erro',
         message: 'Não foi possível carregar os itens de manutenção.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     } finally {
       setIsLoading(false);
@@ -112,7 +72,7 @@ const MaintenanceScreen = () => {
   useEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={{ marginLeft: 8 }}
         >
@@ -139,7 +99,7 @@ const MaintenanceScreen = () => {
     useCallback(() => {
       appLog.debug('Maintenance screen focused - reloading data');
       loadMaintenanceItems();
-      
+
       return () => {
         appLog.debug('Maintenance screen unfocused');
       };
@@ -149,66 +109,66 @@ const MaintenanceScreen = () => {
   const handleMarkAsDone = async (item: MaintenanceItem) => {
     try {
       appLog.debug(`Marking item as completed: ID=${item.id}, Type=${item.type}, Name=${item.name}`);
-      
+
       // Formatar a data atual no padrão brasileiro (DD/MM/YYYY)
       const today = new Date();
       const formattedDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
-      
+
       appLog.debug(`Formatted date (Brazilian format): ${formattedDate}`);
-      
+
       // Verificar se o item existe antes de tentar atualizá-lo
       if (item.type === 'console') {
         // Obter todos os consoles para verificar se o item existe
         const consoles = await getConsoles();
-        
+
         const consoleExists = consoles.some(consoleItem => consoleItem.id === item.id);
-        
+
         if (!consoleExists) {
           appLog.error(`Console not found: ID=${item.id}`);
           showAlert({
             title: 'Erro',
             message: 'Console não encontrado. Pode ter sido excluído.',
-            buttons: [{ text: 'OK', onPress: () => {} }]
+            buttons: [{ text: 'OK', onPress: () => { } }]
           });
           await loadMaintenanceItems(); // Recarregar para atualizar a lista
           return;
         }
-        
+
         appLog.debug(`Updating console: ID=${item.id}`);
-        await updateConsole(item.id, { 
-          lastMaintenanceDate: formattedDate 
+        await updateConsole(item.id, {
+          lastMaintenanceDate: formattedDate
         });
         appLog.debug(`Console updated successfully: ID=${item.id}`);
       } else {
         // Obter todos os acessórios para verificar se o item existe
         const accessories = await getAccessories();
-        
+
         const accessoryExists = accessories.some(accessory => accessory.id === item.id);
-        
+
         if (!accessoryExists) {
           appLog.error(`Accessory not found: ID=${item.id}`);
           showAlert({
             title: 'Erro',
             message: 'Acessório não encontrado. Pode ter sido excluído.',
-            buttons: [{ text: 'OK', onPress: () => {} }]
+            buttons: [{ text: 'OK', onPress: () => { } }]
           });
           await loadMaintenanceItems(); // Recarregar para atualizar a lista
           return;
         }
-        
+
         appLog.debug(`Updating accessory: ID=${item.id}`);
-        await updateAccessory(item.id, { 
-          lastMaintenanceDate: formattedDate 
+        await updateAccessory(item.id, {
+          lastMaintenanceDate: formattedDate
         });
         appLog.debug(`Accessory updated successfully: ID=${item.id}`);
       }
-      
+
       showAlert({
         title: 'Sucesso',
         message: 'Manutenção marcada como concluída!',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
-      
+
       // Recarregar os dados após marcar como concluída
       appLog.debug('Reloading data after marking maintenance as completed');
       await loadMaintenanceItems();
@@ -217,7 +177,7 @@ const MaintenanceScreen = () => {
       showAlert({
         title: 'Erro',
         message: `Não foi possível atualizar o status da manutenção: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       await loadMaintenanceItems(); // Tentar recarregar mesmo após erro
     }
@@ -231,7 +191,7 @@ const MaintenanceScreen = () => {
         const date = new Date(Number(year), Number(month) - 1, Number(day));
         return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
       }
-      
+
       // Caso contrário, converter para o formato brasileiro
       const date = new Date(dateString);
       return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
@@ -268,8 +228,8 @@ const MaintenanceScreen = () => {
             <View style={styles.dateContainer}>
               <Calendar size={14} color="#94a3b8" />
               <Text style={styles.dateText}>
-                {item.daysRemaining < 0 
-                  ? `Manutenção atrasada desde ${formatDate(item.nextMaintenanceDate)}` 
+                {item.daysRemaining < 0
+                  ? `Manutenção atrasada desde ${formatDate(item.nextMaintenanceDate)}`
                   : `Próxima manutenção: ${formatDate(item.nextMaintenanceDate)}`}
               </Text>
             </View>
@@ -283,18 +243,18 @@ const MaintenanceScreen = () => {
             )}
             <View style={[styles.badge, { backgroundColor: `${getUrgencyColor(item.daysRemaining)}20` }]}>
               <Text style={[styles.badgeText, { color: getUrgencyColor(item.daysRemaining) }]}>
-                {item.daysRemaining < 0 
-                  ? `${Math.abs(item.daysRemaining)} dias de atraso` 
-                  : item.daysRemaining === 0 
-                    ? 'Hoje' 
+                {item.daysRemaining < 0
+                  ? `${Math.abs(item.daysRemaining)} dias de atraso`
+                  : item.daysRemaining === 0
+                    ? 'Hoje'
                     : `Em ${item.daysRemaining} dias`}
               </Text>
             </View>
           </View>
         </View>
         <View style={styles.cardActions}>
-          <Button 
-            mode="contained" 
+          <Button
+            mode="contained"
             onPress={() => handleMarkAsDone(item)}
             style={[styles.button, { backgroundColor: getUrgencyColor(item.daysRemaining) }]}
             labelStyle={styles.buttonLabel}
@@ -314,7 +274,7 @@ const MaintenanceScreen = () => {
   );
 
   return (
-    <ScrollView 
+    <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       refreshControl={
         <RefreshControl
@@ -333,7 +293,7 @@ const MaintenanceScreen = () => {
           </View>
           <Text style={styles.sectionCount}>{overdueItems.length}</Text>
         </View>
-        
+
         {overdueItems.length > 0 ? (
           overdueItems.map(item => (
             <View key={item.id} style={styles.itemContainer}>
@@ -356,7 +316,7 @@ const MaintenanceScreen = () => {
           </View>
           <Text style={styles.sectionCount}>{upcomingItems.length}</Text>
         </View>
-        
+
         {upcomingItems.length > 0 ? (
           upcomingItems.map(item => (
             <View key={item.id} style={styles.itemContainer}>

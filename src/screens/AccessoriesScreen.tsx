@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image } from 'react-native';
-import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Switch, useTheme } from 'react-native-paper';
+import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Switch, useTheme } from 'react-native-paper';
 import { getAccessories, addAccessory, updateAccessory, deleteAccessory, getConsoles } from '../services/storage';
 import { Accessory, Console } from '../types';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal, ChevronLeft, Bell } from 'lucide-react-native';
+import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal, ChevronLeft, Bell, Edit, Trash2, Search } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
+import { ItemCard } from '../components/ItemCard';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
@@ -14,16 +15,18 @@ import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
-import { MainTabParamList } from '../navigation/types';
+import { MainTabParamList, RootStackParamList } from '../navigation/types';
+import type { RouteProp } from '@react-navigation/native';
 
 // Lista de tipos de acessórios disponíveis
 const TIPOS = ['Controles', 'Cabos', 'Memorycards', 'Outros'];
 
 type AccessoriesScreenProps = {
   navigation: BottomTabNavigationProp<MainTabParamList>;
+  route: RouteProp<RootStackParamList, 'Accessories'>;
 };
 
-const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
+const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
   const theme = useTheme();
   const { showAlert } = useAlert();
   const [accessories, setAccessories] = useState<Accessory[]>([]);
@@ -72,7 +75,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível carregar os acessórios.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -83,14 +86,24 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
     }, [])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.autoOpenAdd) {
+        setModalVisible(true);
+        // Limpar o parâmetro para não abrir novamente ao voltar
+        navigation.setParams({ autoOpenAdd: undefined } as any);
+      }
+    }, [route.params?.autoOpenAdd])
+  );
+
   useEffect(() => {
     if (searchQuery || filters.type || filters.consoleId) {
       const filtered = accessories.filter(accessory => {
         const matchesSearch = accessory.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            accessory.type.toLowerCase().includes(searchQuery.toLowerCase());
-        
+          accessory.type.toLowerCase().includes(searchQuery.toLowerCase());
+
         const matchesType = !filters.type || accessory.type === filters.type;
-        
+
         const matchesConsole = !filters.consoleId || accessory.consoleId === filters.consoleId;
 
         return matchesSearch && matchesType && matchesConsole;
@@ -122,7 +135,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
   useEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => navigation.navigate('Home')}
           style={{ marginLeft: 8 }}
         >
@@ -137,7 +150,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       showAlert({
         title: 'Campos obrigatórios',
         message: 'Por favor, preencha o nome e o tipo do acessório.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       return;
     }
@@ -162,14 +175,14 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
         showAlert({
           title: 'Sucesso',
           message: 'Acessório atualizado com sucesso!',
-          buttons: [{ text: 'OK', onPress: () => {} }]
+          buttons: [{ text: 'OK', onPress: () => { } }]
         });
       } else {
         await addAccessory(newAccessory);
         showAlert({
           title: 'Sucesso',
           message: 'Acessório adicionado com sucesso!',
-          buttons: [{ text: 'OK', onPress: () => {} }]
+          buttons: [{ text: 'OK', onPress: () => { } }]
         });
       }
 
@@ -183,7 +196,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível salvar o acessório.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -213,7 +226,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       showAlert({
         title: 'Sucesso',
         message: 'Acessório excluído com sucesso!',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       loadAccessories();
     } catch (error) {
@@ -221,7 +234,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível excluir o acessório.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
     setMenuVisible(null);
@@ -232,7 +245,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
       title: 'Confirmar exclusão',
       message: 'Tem certeza que deseja excluir este acessório?',
       buttons: [
-        { text: 'Cancelar', onPress: () => {}, style: 'cancel' },
+        { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
         { text: 'Excluir', onPress: () => handleDeleteAccessory(id), style: 'destructive' },
       ]
     });
@@ -384,63 +397,56 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
   );
 
   const renderItem = ({ item }: { item: Accessory }) => (
-    <View style={styles.cardContainer}>
-      <TouchableOpacity onPress={() => handleViewDetails(item)}>
-        <Card style={styles.fixedSizeCard}>
-          {item.imageUrl ? (
-            <Card.Cover
-              source={{ uri: item.imageUrl }}
-              style={styles.cardCover}
-            />
-          ) : (
-            <View style={styles.placeholderCover}>
-              <Gamepad2 color={appColors.primary} size={32} />
-            </View>
-          )}
-          <Card.Content style={styles.contentPadding}>
-            <View style={styles.cardHeader}>
-              <View style={styles.titleContainer}>
-                <Text style={[commonStyles.itemTitle, styles.cardTitle]} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
-                <Text style={[commonStyles.itemSubtitle, styles.cardSubtitle]} numberOfLines={1} ellipsizeMode="tail">{getConsoleName(item.consoleId)}</Text>
-              </View>
-              <Menu
-                visible={menuVisible === item.id}
-                onDismiss={() => setMenuVisible(null)}
-                anchor={
-                  <IconButton
-                    icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
-                    onPress={() => setMenuVisible(item.id)}
-                    size={20}
-                    style={styles.menuIcon}
-                  />
-                }
-              >
-                <Menu.Item 
-                  onPress={() => {
-                    setMenuVisible(null);
-                    handleEditAccessory(item);
-                  }} 
-                  title="Editar" 
-                />
-                <Menu.Item 
-                  onPress={() => {
-                    setMenuVisible(null);
-                    confirmDelete(item.id);
-                  }} 
-                  title="Excluir"
-                  titleStyle={{ color: appColors.destructive }}
-                />
-              </Menu>
-            </View>
-            <View style={styles.badgeContainer}>
-              <View style={[commonStyles.badge, styles.smallBadge]}>
-                <Text style={[commonStyles.badgeText, styles.smallBadgeText]}>{item.type}</Text>
-              </View>
-            </View>
-          </Card.Content>
-        </Card>
-      </TouchableOpacity>
-    </View>
+    <ItemCard
+      layout="grid"
+      title={item.name}
+      subtitle={getConsoleName(item.consoleId)}
+      imageUri={item.imageUrl}
+      placeholderIcon={<Gamepad2 size={40} color={appColors.primary} />}
+      onPress={() => handleViewDetails(item)}
+      onLongPress={() => {
+        setMenuVisible(item.id);
+      }}
+      rightElement={
+        <Menu
+          visible={menuVisible === item.id}
+          onDismiss={() => setMenuVisible(null)}
+          anchor={
+            <TouchableOpacity
+              onPress={() => setMenuVisible(item.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />
+            </TouchableOpacity>
+          }
+        >
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(null);
+              handleEditAccessory(item);
+            }}
+            title="Editar"
+            leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
+          />
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(null);
+              confirmDelete(item.id);
+            }}
+            title="Excluir"
+            leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
+            titleStyle={{ color: appColors.destructive }}
+          />
+        </Menu>
+      }
+      footer={
+        <View style={styles.badgeContainer}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{item.type}</Text>
+          </View>
+        </View>
+      }
+    />
   );
 
   const EmptyState = () => (
@@ -477,9 +483,9 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
             ]}
             onPress={() => setFilterModalVisible(true)}
           >
-            <SlidersHorizontal 
-              color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant} 
-              size={20} 
+            <SlidersHorizontal
+              color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant}
+              size={20}
             />
             {activeFiltersCount > 0 && (
               <View style={styles.filterBadge}>
@@ -706,7 +712,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
                       showAlert({
                         title: 'Permissão de Notificação',
                         message: 'Para receber lembretes de manutenção, é necessário permitir notificações nas configurações do aplicativo.',
-                        buttons: [{ text: 'OK', onPress: () => {} }]
+                        buttons: [{ text: 'OK', onPress: () => { } }]
                       });
                     }
                   }
@@ -758,7 +764,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
                         showAlert({
                           title: 'Permissão necessária',
                           message: 'Precisamos de acesso à sua galeria para selecionar uma imagem.',
-                          buttons: [{ text: 'OK', onPress: () => {} }]
+                          buttons: [{ text: 'OK', onPress: () => { } }]
                         });
                         return;
                       }
@@ -784,7 +790,7 @@ const AccessoriesScreen = ({ navigation }: AccessoriesScreenProps) => {
                       showAlert({
                         title: 'Erro',
                         message: 'Não foi possível selecionar a imagem.',
-                        buttons: [{ text: 'OK', onPress: () => {} }]
+                        buttons: [{ text: 'OK', onPress: () => { } }]
                       });
                     }
                   }}
@@ -834,66 +840,33 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 8,
   },
-  cardContainer: {
-    width: '48%',
-    marginHorizontal: 4,
-    marginBottom: 16,
-  },
-  fixedSizeCard: {
-    flex: 0,
-    width: '100%',
-    overflow: 'hidden',
-  },
+
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
   },
-  titleContainer: {
-    flex: 1,
-    marginRight: 4,
-    minHeight: 42,
-  },
-  cardTitle: {
-    fontSize: 14,
-    lineHeight: 18,
-    marginBottom: 4,
-    height: 36,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  cardCover: {
-    height: 140,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  placeholderCover: {
-    height: 140,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  contentPadding: {
-    paddingTop: 12,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
+
+
   badgeContainer: {
     flexDirection: 'row',
-    marginTop: 8,
     flexWrap: 'wrap',
-    gap: 4,
+    gap: 6,
+  },
+  badge: {
+    backgroundColor: 'rgba(37, 99, 235, 0.15)', // Primary color opacity
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  menuIcon: {
+    padding: 8,
   },
   searchRow: {
     flexDirection: 'row',
@@ -944,68 +917,6 @@ const styles = StyleSheet.create({
     color: appColors.primary,
     fontSize: 14,
   },
-  imageUploader: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderStyle: 'dashed',
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    aspectRatio: 4/3,
-  },
-  imageUploaderText: {
-    color: '#94a3b8',
-    fontSize: 16,
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  imageUploaderSubtext: {
-    color: '#64748b',
-    fontSize: 14,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-    borderRadius: 12,
-    overflow: 'hidden',
-    aspectRatio: 4/3,
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  labelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  labelText: {
-    marginLeft: 8,
-    marginBottom: 0,
-  },
-  menuIcon: {
-    padding: 8,
-  },
-  smallBadge: {
-    padding: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-  },
-  smallBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
   intervalContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1043,6 +954,56 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  labelText: {
+    marginLeft: 8,
+    marginBottom: 0,
+  },
+  imagePreviewContainer: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    aspectRatio: 4 / 3,
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  imageUploader: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderStyle: 'dashed',
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    aspectRatio: 4 / 3,
+  },
+  imageUploaderText: {
+    color: '#94a3b8',
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  imageUploaderSubtext: {
+    color: '#64748b',
+    fontSize: 14,
+    marginTop: 4,
+    textAlign: 'center',
+  },
 });
 
-export default AccessoriesScreen; 
+export default AccessoriesScreen;

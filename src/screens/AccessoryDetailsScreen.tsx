@@ -30,16 +30,16 @@ const AccessoryDetailsScreen = () => {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'Data não disponível';
-    
+
     try {
       // Verificar se a data já está no formato DD/MM/YYYY
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
         return dateString;
       }
-      
+
       // Tentar converter para Date e formatar
       const date = new Date(dateString);
-      
+
       // Verificar se a data é válida
       if (isNaN(date.getTime())) {
         // Tentar converter de formato DD/MM/YYYY para Date
@@ -52,7 +52,7 @@ const AccessoryDetailsScreen = () => {
         }
         return 'Data inválida';
       }
-      
+
       return date.toLocaleDateString('pt-BR');
     } catch (error) {
       console.error('Erro ao formatar data:', error);
@@ -64,7 +64,10 @@ const AccessoryDetailsScreen = () => {
     <ScrollView style={styles.container}>
       <View style={styles.imageContainer}>
         {accessory.imageUrl ? (
-          <Image source={{ uri: accessory.imageUrl }} style={styles.image} resizeMode="contain" />
+          <>
+            <Image source={{ uri: accessory.imageUrl }} style={styles.image} resizeMode="cover" />
+            <View style={styles.imageOverlay} />
+          </>
         ) : (
           <View style={styles.placeholderImage}>
             <Gamepad size={80} color={appColors.primary} />
@@ -74,7 +77,7 @@ const AccessoryDetailsScreen = () => {
 
       <View style={styles.content}>
         <Text style={styles.title}>{accessory.name}</Text>
-        
+
         <View style={styles.badgeContainer}>
           {accessory.type && (
             <View style={styles.badge}>
@@ -82,7 +85,7 @@ const AccessoryDetailsScreen = () => {
               <Text style={styles.badgeText}>{accessory.type}</Text>
             </View>
           )}
-          
+
           {consoleName && (
             <View style={styles.badge}>
               <Gamepad size={14} color={appColors.foreground} style={styles.badgeIcon} />
@@ -94,14 +97,14 @@ const AccessoryDetailsScreen = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informações de Compra</Text>
           <Divider style={styles.divider} />
-          
+
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <ShoppingBag size={20} color={appColors.primary} />
               <Text style={styles.infoLabel}>Data de Compra</Text>
               <Text style={styles.infoValue}>{formatDate(accessory.purchaseDate)}</Text>
             </View>
-            
+
             {accessory.condition && (
               <View style={styles.infoItem}>
                 <Tag size={20} color={appColors.primary} />
@@ -110,7 +113,7 @@ const AccessoryDetailsScreen = () => {
               </View>
             )}
           </View>
-          
+
           <View style={styles.priceContainer}>
             <Text style={styles.priceLabel}>Preço Pago:</Text>
             <Text style={styles.priceValue}>
@@ -122,7 +125,7 @@ const AccessoryDetailsScreen = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Manutenção</Text>
           <Divider style={styles.divider} />
-          
+
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Wrench size={20} color={appColors.primary} />
@@ -131,7 +134,7 @@ const AccessoryDetailsScreen = () => {
                 {accessory.lastMaintenanceDate ? formatDate(accessory.lastMaintenanceDate) : 'Nunca'}
               </Text>
             </View>
-            
+
             <View style={styles.infoItem}>
               <Calendar size={20} color={appColors.primary} />
               <Text style={styles.infoLabel}>Próxima Manutenção</Text>
@@ -140,7 +143,7 @@ const AccessoryDetailsScreen = () => {
               </Text>
             </View>
           </View>
-          
+
           {accessory.maintenanceDescription && (
             <View style={styles.notesContainer}>
               <Text style={styles.notesLabel}>Observações:</Text>
@@ -159,30 +162,41 @@ const styles = StyleSheet.create({
     backgroundColor: darkTheme.colors.background,
   },
   imageContainer: {
-    height: 250,
-    backgroundColor: darkTheme.colors.surfaceVariant,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: '100%',
+    height: 300,
+    backgroundColor: '#000',
+    position: 'relative',
   },
   image: {
     width: '100%',
     height: '100%',
+  },
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   placeholderImage: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: darkTheme.colors.surfaceVariant,
+    backgroundColor: '#18181b',
   },
   content: {
-    padding: 16,
+    flex: 1,
+    marginTop: -24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: '#121212',
+    padding: 24,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: darkTheme.colors.onBackground,
-    marginBottom: 8,
+    color: '#ffffff',
+    marginBottom: 16,
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   badgeContainer: {
     flexDirection: 'row',

@@ -11,13 +11,13 @@ import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 // Função para traduzir texto usando a API do Google Translate
 const translateText = async (text: string, targetLanguage = 'pt') => {
   if (!text) return '';
-  
+
   try {
     // Usando a API pública do Google Translate
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLanguage}&dt=t&q=${encodeURIComponent(text)}`;
     const response = await fetch(url);
     const data = await response.json();
-    
+
     // A resposta vem em um formato específico, precisamos extrair o texto traduzido
     let translatedText = '';
     if (data && data[0]) {
@@ -27,7 +27,7 @@ const translateText = async (text: string, targetLanguage = 'pt') => {
         }
       });
     }
-    
+
     return translatedText;
   } catch (error) {
     console.error('Erro ao traduzir texto:', error);
@@ -63,7 +63,7 @@ const GameDetailsScreen = () => {
 
     const fetchIGDBDetails = async () => {
       console.log('GameDetailsScreen - Dados do jogo:', JSON.stringify(game));
-      
+
       // Primeiro, verificar se temos dados salvos localmente
       if (game.igdbData) {
         console.log('Usando dados IGDB salvos localmente');
@@ -71,25 +71,25 @@ const GameDetailsScreen = () => {
         setUsingLocalData(true);
         return;
       }
-      
+
       // Se não houver dados salvos, buscar da API
       if (!game.igdbId) {
         console.log('Nenhum ID IGDB fornecido para o jogo:', game.name);
         setIgdbDetails(null);
         return;
       }
-      
+
       console.log('Buscando detalhes do jogo da API com ID:', game.igdbId);
       console.log('Tipo do ID:', typeof game.igdbId);
-      
+
       // Garantir que o ID seja um número
       let gameId;
-      
+
       if (typeof game.igdbId === 'string') {
         // Remover qualquer caractere não numérico
         const cleanId = game.igdbId.replace(/[^0-9]/g, '');
         console.log('ID limpo (apenas números):', cleanId);
-        
+
         if (cleanId) {
           gameId = parseInt(cleanId, 10);
         } else {
@@ -101,16 +101,16 @@ const GameDetailsScreen = () => {
       } else {
         gameId = game.igdbId;
       }
-      
+
       console.log('ID convertido para número:', gameId);
-      
+
       if (isNaN(gameId) || gameId <= 0) {
         console.error('ID do jogo inválido após conversão:', gameId);
         setIgdbDetails(null);
         setLoading(false);
         return;
       }
-      
+
       setLoading(true);
       setUsingLocalData(false);
       try {
@@ -123,10 +123,10 @@ const GameDetailsScreen = () => {
           console.log('IGDB Details Plataformas:', details.platforms ? details.platforms.length : 0);
           console.log('IGDB Details História:', details.storyline ? 'Sim' : 'Não');
           console.log('IGDB Details Resumo:', details.summary ? 'Sim' : 'Não');
-          
+
           // Log de todas as propriedades do objeto para depuração
           console.log('IGDB Details - Todas as propriedades:', Object.keys(details));
-          
+
           // Log de propriedades específicas
           if (details.involved_companies) {
             console.log('IGDB Details - Empresas envolvidas:', details.involved_companies.length);
@@ -155,16 +155,16 @@ const GameDetailsScreen = () => {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'Data não disponível';
-    
+
     try {
       // Verificar se a data já está no formato DD/MM/YYYY
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
         return dateString;
       }
-      
+
       // Tentar converter para Date e formatar
       const date = new Date(dateString);
-      
+
       // Verificar se a data é válida
       if (isNaN(date.getTime())) {
         // Tentar converter de formato DD/MM/YYYY para Date
@@ -177,7 +177,7 @@ const GameDetailsScreen = () => {
         }
         return 'Data inválida';
       }
-      
+
       return date.toLocaleDateString('pt-BR');
     } catch (error) {
       console.error('Erro ao formatar data:', error);
@@ -191,7 +191,7 @@ const GameDetailsScreen = () => {
 
   const getCompanies = (type: 'developer' | 'publisher') => {
     if (!igdbDetails?.involved_companies) return [];
-    
+
     return igdbDetails.involved_companies
       .filter((company: any) => company[type])
       .map((company: any) => company.company.name);
@@ -227,16 +227,16 @@ const GameDetailsScreen = () => {
   // Função para traduzir o resumo e a história
   const handleTranslate = async () => {
     if (!igdbDetails) return;
-    
+
     setTranslating(true);
-    
+
     try {
       // Traduzir o resumo se existir
       if (igdbDetails.summary) {
         const summary = await translateText(igdbDetails.summary);
         setTranslatedSummary(summary);
       }
-      
+
       // Traduzir a história se existir
       if (igdbDetails.storyline) {
         const storyline = await translateText(igdbDetails.storyline);
@@ -252,26 +252,29 @@ const GameDetailsScreen = () => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.imageContainer}>
-      {game.imageUrl ? (
-          <Image source={{ uri: game.imageUrl }} style={styles.image} resizeMode="contain" />
-      ) : (
-        <View style={styles.placeholderImage}>
+        {game.imageUrl ? (
+          <>
+            <Image source={{ uri: game.imageUrl }} style={styles.image} resizeMode="cover" />
+            <View style={styles.imageOverlay} />
+          </>
+        ) : (
+          <View style={styles.placeholderImage}>
             <Gamepad size={80} color={appColors.primary} />
-        </View>
-      )}
+          </View>
+        )}
       </View>
 
       <View style={styles.content}>
         <Text style={styles.title}>{game.name}</Text>
-        
+
         <View style={styles.badgeContainer}>
           {game.genre && (
             <View style={styles.badge}>
               <Tag size={14} color={appColors.foreground} style={styles.badgeIcon} />
               <Text style={styles.badgeText}>{game.genre}</Text>
-          </View>
+            </View>
           )}
-          
+
           {consoleName && (
             <View style={styles.badge}>
               <Gamepad size={14} color={appColors.foreground} style={styles.badgeIcon} />
@@ -281,14 +284,14 @@ const GameDetailsScreen = () => {
         </View>
 
         <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Informações Gerais</Text>
+          <Text style={styles.sectionTitle}>Informações Gerais</Text>
           <Divider style={styles.divider} />
-          
+
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Calendar size={20} color={appColors.primary} />
-            <Text style={styles.infoLabel}>Ano de Lançamento</Text>
-            <Text style={styles.infoValue}>{game.releaseYear || 'Não informado'}</Text>
+              <Text style={styles.infoLabel}>Ano de Lançamento</Text>
+              <Text style={styles.infoValue}>{game.releaseYear || 'Não informado'}</Text>
             </View>
 
             <View style={styles.infoItem}>
@@ -302,7 +305,7 @@ const GameDetailsScreen = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informações de Compra</Text>
           <Divider style={styles.divider} />
-          
+
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Bookmark size={20} color={appColors.primary} />
@@ -310,7 +313,7 @@ const GameDetailsScreen = () => {
               <Text style={styles.infoValue}>{formatDate(game.purchaseDate)}</Text>
             </View>
           </View>
-          
+
           <View style={styles.priceContainer}>
             <Text style={styles.priceLabel}>Preço Pago:</Text>
             <Text style={styles.priceValue}>
@@ -325,10 +328,10 @@ const GameDetailsScreen = () => {
             <Text style={styles.loadingText}>Carregando detalhes da IGDB...</Text>
           </View>
         ) : (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Detalhes da IGDB</Text>
-              
+
               <View style={styles.sectionHeaderRight}>
                 {usingLocalData && (
                   <View style={styles.localDataBadge}>
@@ -336,7 +339,7 @@ const GameDetailsScreen = () => {
                   </View>
                 )}
                 {igdbDetails && (igdbDetails.summary || igdbDetails.storyline) && (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.translateButton}
                     onPress={handleTranslate}
                     disabled={translating}
@@ -355,9 +358,9 @@ const GameDetailsScreen = () => {
                 )}
               </View>
             </View>
-            
+
             <Divider style={styles.divider} />
-            
+
             {!igdbDetails && game.igdbId ? (
               <View>
                 <Text style={styles.noDataText}>Não foi possível carregar os detalhes da IGDB.</Text>
@@ -378,30 +381,30 @@ const GameDetailsScreen = () => {
                     <Text style={styles.detailLabel}>Resumo</Text>
                   </View>
                   <Text style={styles.detailValue}>
-                    {translatedSummary 
-                      ? (showFullDescription 
-                          ? translatedSummary 
-                          : (translatedSummary.length > 150 
-                              ? translatedSummary.substring(0, 150) + '...' 
-                              : translatedSummary))
-                      : igdbDetails?.summary 
-                        ? (showFullDescription 
-                            ? igdbDetails.summary 
-                            : (igdbDetails.summary.length > 150 
-                                ? igdbDetails.summary.substring(0, 150) + '...' 
-                                : igdbDetails.summary))
+                    {translatedSummary
+                      ? (showFullDescription
+                        ? translatedSummary
+                        : (translatedSummary.length > 150
+                          ? translatedSummary.substring(0, 150) + '...'
+                          : translatedSummary))
+                      : igdbDetails?.summary
+                        ? (showFullDescription
+                          ? igdbDetails.summary
+                          : (igdbDetails.summary.length > 150
+                            ? igdbDetails.summary.substring(0, 150) + '...'
+                            : igdbDetails.summary))
                         : 'Informação não disponível'}
                   </Text>
-                  {((translatedSummary && translatedSummary.length > 150) || 
+                  {((translatedSummary && translatedSummary.length > 150) ||
                     (igdbDetails?.summary && igdbDetails.summary.length > 150)) && (
-                    <TouchableOpacity onPress={() => setShowFullDescription(!showFullDescription)}>
-                      <Text style={styles.readMore}>
-                        {showFullDescription ? 'Mostrar menos' : 'Ler mais'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                      <TouchableOpacity onPress={() => setShowFullDescription(!showFullDescription)}>
+                        <Text style={styles.readMore}>
+                          {showFullDescription ? 'Mostrar menos' : 'Ler mais'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                 </View>
-                
+
                 {/* Classificação */}
                 {(igdbDetails?.rating || igdbDetails?.aggregated_rating) && (
                   <View style={styles.detailItem}>
@@ -418,7 +421,7 @@ const GameDetailsScreen = () => {
                           <Text style={styles.ratingCount}>({igdbDetails.rating_count || 0} votos)</Text>
                         </View>
                       )}
-                      
+
                       {igdbDetails?.aggregated_rating && (
                         <View style={styles.ratingItem}>
                           <Star size={16} color={appColors.primary} />
@@ -430,7 +433,7 @@ const GameDetailsScreen = () => {
                     </View>
                   </View>
                 )}
-                
+
                 {/* Desenvolvedores */}
                 {getCompanies('developer').length > 0 && (
                   <View style={styles.detailItem}>
@@ -441,7 +444,7 @@ const GameDetailsScreen = () => {
                     <Text style={styles.detailValue}>{getCompanies('developer').join(', ')}</Text>
                   </View>
                 )}
-                
+
                 {/* Publicadoras */}
                 {getCompanies('publisher').length > 0 && (
                   <View style={styles.detailItem}>
@@ -452,7 +455,7 @@ const GameDetailsScreen = () => {
                     <Text style={styles.detailValue}>{getCompanies('publisher').join(', ')}</Text>
                   </View>
                 )}
-                
+
                 {/* Plataformas Suportadas */}
                 <View style={styles.detailItem}>
                   <View style={styles.detailLabelContainer}>
@@ -460,12 +463,12 @@ const GameDetailsScreen = () => {
                     <Text style={styles.detailLabel}>Plataformas Suportadas</Text>
                   </View>
                   <Text style={styles.detailValue}>
-                    {igdbDetails?.platforms ? 
-                      igdbDetails.platforms.map((platform: any) => platform.name).join(', ') : 
+                    {igdbDetails?.platforms ?
+                      igdbDetails.platforms.map((platform: any) => platform.name).join(', ') :
                       'Informação não disponível'}
                   </Text>
                 </View>
-                
+
                 {/* História */}
                 <View style={styles.detailItem}>
                   <View style={styles.detailLabelContainer}>
@@ -473,30 +476,30 @@ const GameDetailsScreen = () => {
                     <Text style={styles.detailLabel}>História</Text>
                   </View>
                   <Text style={styles.detailValue}>
-                    {translatedStoryline 
-                      ? (showFullStoryline 
-                          ? translatedStoryline 
-                          : (translatedStoryline.length > 150 
-                              ? translatedStoryline.substring(0, 150) + '...' 
-                              : translatedStoryline))
-                      : igdbDetails?.storyline 
-                        ? (showFullStoryline 
-                            ? igdbDetails.storyline 
-                            : (igdbDetails.storyline.length > 150 
-                                ? igdbDetails.storyline.substring(0, 150) + '...' 
-                                : igdbDetails.storyline))
+                    {translatedStoryline
+                      ? (showFullStoryline
+                        ? translatedStoryline
+                        : (translatedStoryline.length > 150
+                          ? translatedStoryline.substring(0, 150) + '...'
+                          : translatedStoryline))
+                      : igdbDetails?.storyline
+                        ? (showFullStoryline
+                          ? igdbDetails.storyline
+                          : (igdbDetails.storyline.length > 150
+                            ? igdbDetails.storyline.substring(0, 150) + '...'
+                            : igdbDetails.storyline))
                         : 'Informação não disponível'}
                   </Text>
-                  {((translatedStoryline && translatedStoryline.length > 150) || 
+                  {((translatedStoryline && translatedStoryline.length > 150) ||
                     (igdbDetails?.storyline && igdbDetails.storyline.length > 150)) && (
-                    <TouchableOpacity onPress={() => setShowFullStoryline(!showFullStoryline)}>
-                      <Text style={styles.readMore}>
-                        {showFullStoryline ? 'Mostrar menos' : 'Ler mais'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                      <TouchableOpacity onPress={() => setShowFullStoryline(!showFullStoryline)}>
+                        <Text style={styles.readMore}>
+                          {showFullStoryline ? 'Mostrar menos' : 'Ler mais'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                 </View>
-                
+
                 {/* Modos de Jogo */}
                 {igdbDetails?.game_modes && igdbDetails.game_modes.length > 0 && (
                   <View style={styles.detailItem}>
@@ -509,7 +512,7 @@ const GameDetailsScreen = () => {
                     </Text>
                   </View>
                 )}
-                
+
                 {/* Temas */}
                 {igdbDetails?.themes && igdbDetails.themes.length > 0 && (
                   <View style={styles.detailItem}>
@@ -522,7 +525,7 @@ const GameDetailsScreen = () => {
                     </Text>
                   </View>
                 )}
-                
+
                 {/* Capturas de Tela */}
                 {igdbDetails?.screenshots && igdbDetails.screenshots.length > 0 && (
                   <View style={styles.detailItem}>
@@ -532,7 +535,7 @@ const GameDetailsScreen = () => {
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.screenshotsContainer}>
                       {igdbDetails.screenshots.map((screenshot: any, index: number) => (
-                        <Image 
+                        <Image
                           key={index}
                           source={{ uri: formatImageUrl(screenshot.image_id, 'screenshot') }}
                           style={styles.screenshotImage}
@@ -576,10 +579,11 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: darkTheme.colors.onBackground,
-    marginBottom: 8,
+    marginBottom: 12,
+    letterSpacing: 0.5,
   },
   badgeContainer: {
     flexDirection: 'row',
@@ -796,6 +800,10 @@ const styles = StyleSheet.create({
     color: darkTheme.colors.primary,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
 });
 

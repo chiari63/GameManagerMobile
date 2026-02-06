@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Image } from 'react-native';
-import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
+import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
 import { getGames, addGame, updateGame, deleteGame, getConsoles } from '../services/storage';
 import { Game, Console } from '../types';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell, Search } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
+import { ItemCard } from '../components/ItemCard';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
@@ -15,7 +16,8 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
 import IGDBGameSearchModal from '../components/IGDBGameSearchModal';
-import { MainTabParamList } from '../navigation/types';
+import { GamesStackParamList, MainTabParamList } from '../navigation/types';
+import type { RouteProp } from '@react-navigation/native';
 
 // Lista de regiões disponíveis
 const REGIOES = ['Americano', 'Japonês', 'Brasileiro'];
@@ -25,9 +27,10 @@ const GENEROS = ['Ação', 'Aventura', 'RPG', 'Estratégia', 'Esporte', 'Corrida
 
 type GamesScreenProps = {
   navigation: BottomTabNavigationProp<MainTabParamList>;
+  route: RouteProp<GamesStackParamList, 'GamesList'>;
 };
 
-const GamesScreen = ({ navigation }: GamesScreenProps) => {
+const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
   const theme = useTheme();
   const { showAlert } = useAlert();
   const [games, setGames] = useState<Game[]>([]);
@@ -78,7 +81,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível carregar os jogos.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -93,8 +96,8 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
     if (searchQuery || filters.genre || filters.region || filters.consoleId) {
       const filtered = games.filter(game => {
         const matchesSearch = game.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            game.genre.toLowerCase().includes(searchQuery.toLowerCase());
-        
+          game.genre.toLowerCase().includes(searchQuery.toLowerCase());
+
         const matchesGenre = !filters.genre || game.genre === filters.genre;
         const matchesRegion = !filters.region || game.region === filters.region;
         const matchesConsole = !filters.consoleId || game.consoleId === filters.consoleId;
@@ -110,6 +113,16 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
     const activeFilters = Object.values(filters).filter(value => value !== '').length;
     setActiveFiltersCount(activeFilters);
   }, [searchQuery, games, filters]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.autoOpenAdd) {
+        setModalVisible(true);
+        // Limpar o parâmetro para não abrir novamente ao voltar
+        navigation.setParams({ autoOpenAdd: undefined } as any);
+      }
+    }, [route.params?.autoOpenAdd])
+  );
 
   // Adiciona listener para o evento de restauração
   useEffect(() => {
@@ -128,7 +141,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
   useEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => navigation.navigate('Home')}
           style={{ marginLeft: 8 }}
         >
@@ -150,7 +163,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Por favor, preencha todos os campos obrigatórios.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       return;
     }
@@ -160,7 +173,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'A data de compra deve estar no formato DD/MM/YYYY.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       return;
     }
@@ -178,14 +191,14 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
         showAlert({
           title: 'Sucesso',
           message: 'Jogo atualizado com sucesso!',
-          buttons: [{ text: 'OK', onPress: () => {} }]
+          buttons: [{ text: 'OK', onPress: () => { } }]
         });
       } else {
         await addGame(gameData);
         showAlert({
           title: 'Sucesso',
           message: 'Jogo adicionado com sucesso!',
-          buttons: [{ text: 'OK', onPress: () => {} }]
+          buttons: [{ text: 'OK', onPress: () => { } }]
         });
       }
 
@@ -198,7 +211,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível salvar o jogo.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -228,7 +241,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       showAlert({
         title: 'Sucesso',
         message: 'Jogo excluído com sucesso!',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       loadData();
     } catch (error) {
@@ -236,7 +249,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível excluir o jogo.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
     setMenuVisible(null);
@@ -247,7 +260,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
       title: 'Confirmar exclusão',
       message: 'Tem certeza que deseja excluir este jogo?',
       buttons: [
-        { text: 'Cancelar', onPress: () => {}, style: 'cancel' },
+        { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
         { text: 'Excluir', onPress: () => handleDeleteGame(id), style: 'destructive' },
       ]
     });
@@ -437,72 +450,63 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
   );
 
   const renderItem = ({ item }: { item: Game }) => (
-    <View style={styles.cardContainer}>
-      <TouchableOpacity onPress={() => handleViewDetails(item)}>
-        <Card style={styles.fixedSizeCard}>
-          {item.imageUrl ? (
-            <Card.Cover
-              source={{ uri: item.imageUrl }}
-              style={styles.cardCover}
+    <ItemCard
+      layout="grid"
+      title={item.name}
+      subtitle={getConsoleName(item.consoleId)}
+      imageUri={item.imageUrl}
+      placeholderIcon={<Gamepad2 size={40} color={appColors.primary} />}
+      onPress={() => handleViewDetails(item)}
+      onLongPress={() => {
+        setMenuVisible(item.id);
+      }}
+      rightElement={
+        <Menu
+          visible={menuVisible === item.id}
+          onDismiss={() => setMenuVisible(null)}
+          anchor={
+            <IconButton
+              icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
+              onPress={() => setMenuVisible(item.id)}
+              size={20}
+              style={{ margin: -8 }}
             />
+          }
+        >
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(null);
+              handleEditGame(item);
+            }}
+            title="Editar"
+          />
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(null);
+              confirmDelete(item.id);
+            }}
+            title="Excluir"
+            titleStyle={{ color: appColors.destructive }}
+          />
+        </Menu>
+      }
+      footer={
+        <View style={styles.badgeContainer}>
+          <View style={[commonStyles.badge, styles.smallBadge]}>
+            <Text style={[commonStyles.badgeText, styles.smallBadgeText]}>{item.genre}</Text>
+          </View>
+          {item.isPhysical ? (
+            <View style={[commonStyles.badge, styles.smallBadge, { marginLeft: 4, backgroundColor: 'rgba(74, 222, 128, 0.1)' }]}>
+              <Text style={[commonStyles.badgeText, styles.smallBadgeText, { color: '#4ade80' }]}>Físico</Text>
+            </View>
           ) : (
-            <View style={styles.placeholderCover}>
-              <Gamepad2 color={appColors.primary} size={32} />
+            <View style={[commonStyles.badge, styles.smallBadge, { marginLeft: 4, backgroundColor: 'rgba(251, 113, 133, 0.1)' }]}>
+              <Text style={[commonStyles.badgeText, styles.smallBadgeText, { color: '#fb7185' }]}>Digital</Text>
             </View>
           )}
-          <Card.Content style={styles.contentPadding}>
-            <View style={styles.cardHeader}>
-              <View style={styles.titleContainer}>
-                <Text style={[commonStyles.itemTitle, styles.cardTitle]} numberOfLines={2} ellipsizeMode="tail">{item.name}</Text>
-                <Text style={[commonStyles.itemSubtitle, styles.cardSubtitle]} numberOfLines={1} ellipsizeMode="tail">{getConsoleName(item.consoleId)}</Text>
-              </View>
-              <Menu
-                visible={menuVisible === item.id}
-                onDismiss={() => setMenuVisible(null)}
-                anchor={
-                  <IconButton
-                    icon={() => <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />}
-                    onPress={() => setMenuVisible(item.id)}
-                    size={20}
-                    style={styles.menuIcon}
-                  />
-                }
-              >
-                <Menu.Item 
-                  onPress={() => {
-                    setMenuVisible(null);
-                    handleEditGame(item);
-                  }} 
-                  title="Editar" 
-                />
-                <Menu.Item 
-                  onPress={() => {
-                    setMenuVisible(null);
-                    confirmDelete(item.id);
-                  }} 
-                  title="Excluir"
-                  titleStyle={{ color: appColors.destructive }}
-                />
-              </Menu>
-            </View>
-            <View style={styles.badgeContainer}>
-              <View style={[commonStyles.badge, styles.smallBadge]}>
-                <Text style={[commonStyles.badgeText, styles.smallBadgeText]}>{item.genre}</Text>
-              </View>
-              {item.isPhysical ? (
-                <View style={[commonStyles.badge, styles.smallBadge, { marginLeft: 4, backgroundColor: 'rgba(74, 222, 128, 0.1)' }]}>
-                  <Text style={[commonStyles.badgeText, styles.smallBadgeText, { color: '#4ade80' }]}>Físico</Text>
-                </View>
-              ) : (
-                <View style={[commonStyles.badge, styles.smallBadge, { marginLeft: 4, backgroundColor: 'rgba(251, 113, 133, 0.1)' }]}>
-                  <Text style={[commonStyles.badgeText, styles.smallBadgeText, { color: '#fb7185' }]}>Digital</Text>
-                </View>
-              )}
-            </View>
-          </Card.Content>
-        </Card>
-      </TouchableOpacity>
-    </View>
+        </View>
+      }
+    />
   );
 
   const EmptyState = () => (
@@ -520,20 +524,20 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
   // Função para lidar com a seleção de um jogo da API IGDB
   const handleIGDBGameSelect = (gameData: any) => {
     console.log('Dados recebidos da busca IGDB:', gameData);
-    
+
     setFormData({
       ...formData,
       name: gameData.name || formData.name,
       genre: gameData.genre || formData.genre,
       releaseYear: gameData.releaseYear || formData.releaseYear,
       // Manter a imagem existente se já houver, só usar a do IGDB se estiver vazio
-      imageUrl: (formData.imageUrl && formData.imageUrl.trim() !== '') 
-        ? formData.imageUrl 
+      imageUrl: (formData.imageUrl && formData.imageUrl.trim() !== '')
+        ? formData.imageUrl
         : (gameData.imageUrl || formData.imageUrl),
       igdbId: gameData.igdbId,
       igdbData: gameData.igdbData, // Salvar dados completos do IGDB
     });
-    
+
     console.log('FormData atualizado com dados IGDB completos:', formData);
   };
 
@@ -559,9 +563,9 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
             ]}
             onPress={() => setFilterModalVisible(true)}
           >
-            <SlidersHorizontal 
-              color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant} 
-              size={20} 
+            <SlidersHorizontal
+              color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant}
+              size={20}
             />
             {activeFiltersCount > 0 && (
               <View style={styles.filterBadge}>
@@ -802,7 +806,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
                         showAlert({
                           title: 'Permissão necessária',
                           message: 'Precisamos de acesso à sua galeria para selecionar uma imagem.',
-                          buttons: [{ text: 'OK', onPress: () => {} }]
+                          buttons: [{ text: 'OK', onPress: () => { } }]
                         });
                         return;
                       }
@@ -828,7 +832,7 @@ const GamesScreen = ({ navigation }: GamesScreenProps) => {
                       showAlert({
                         title: 'Erro',
                         message: 'Não foi possível selecionar a imagem.',
-                        buttons: [{ text: 'OK', onPress: () => {} }]
+                        buttons: [{ text: 'OK', onPress: () => { } }]
                       });
                     }
                   }}
@@ -885,61 +889,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 8,
   },
-  cardContainer: {
-    width: '48%',
-    marginHorizontal: 4,
-    marginBottom: 16,
-  },
-  fixedSizeCard: {
-    flex: 0,
-    width: '100%',
-    overflow: 'hidden',
-  },
+
   menuButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
-  titleContainer: {
-    flex: 1,
-    marginRight: 4,
-    minHeight: 42,
-  },
-  cardTitle: {
-    fontSize: 14,
-    lineHeight: 18,
-    marginBottom: 4,
-    height: 36,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  cardCover: {
-    height: 140,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  placeholderCover: {
-    height: 140,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  contentPadding: {
-    paddingTop: 12,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
+
   badgeContainer: {
     flexDirection: 'row',
     marginTop: 8,
@@ -1016,7 +974,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    aspectRatio: 4/3,
+    aspectRatio: 4 / 3,
   },
   imageUploaderText: {
     color: '#94a3b8',
@@ -1034,7 +992,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderRadius: 12,
     overflow: 'hidden',
-    aspectRatio: 4/3,
+    aspectRatio: 4 / 3,
   },
   imagePreview: {
     width: '100%',

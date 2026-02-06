@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Card, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, useTheme, Switch } from 'react-native-paper';
+import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, useTheme, Switch } from 'react-native-paper';
 import { getWishlistItems, addWishlistItem, updateWishlistItem, deleteWishlistItem } from '../services/storage';
 import { WishlistItem } from '../types';
-import { Heart, Plus, Edit, Trash2, ChevronDown, Tag, Type, Info, DollarSign, ChevronLeft } from 'lucide-react-native';
+import { Heart, Plus, Edit, Trash2, ChevronDown, Tag, Type, Info, DollarSign, ChevronLeft, Gamepad2 } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
+import { ItemCard } from '../components/ItemCard';
 import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -54,7 +55,7 @@ const WishlistScreen = () => {
   useEffect(() => {
     navigation.setOptions({
       headerLeft: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => navigation.navigate('Home')}
           style={{ marginLeft: 8 }}
         >
@@ -79,7 +80,7 @@ const WishlistScreen = () => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível carregar a lista de desejos.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -111,7 +112,7 @@ const WishlistScreen = () => {
       showAlert({
         title: 'Sucesso',
         message: 'Item removido da lista de desejos!',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       loadWishlist();
     } catch (error) {
@@ -119,7 +120,7 @@ const WishlistScreen = () => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível excluir o item.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -137,14 +138,14 @@ const WishlistScreen = () => {
         showAlert({
           title: 'Sucesso',
           message: 'Item atualizado com sucesso!',
-          buttons: [{ text: 'OK', onPress: () => {} }]
+          buttons: [{ text: 'OK', onPress: () => { } }]
         });
       } else {
         await addWishlistItem(itemData);
         showAlert({
           title: 'Sucesso',
           message: 'Item adicionado com sucesso!',
-          buttons: [{ text: 'OK', onPress: () => {} }]
+          buttons: [{ text: 'OK', onPress: () => { } }]
         });
       }
       setModalVisible(false);
@@ -154,7 +155,7 @@ const WishlistScreen = () => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível salvar o item.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -172,41 +173,48 @@ const WishlistScreen = () => {
     }
   };
 
+  const getIconForType = (type: string) => {
+    switch (type) {
+      case 'game': return <Gamepad2 size={32} color={appColors.primary} />;
+      case 'console': return <Gamepad2 size={32} color={appColors.primary} />;
+      case 'accessory': return <Tag size={32} color={appColors.primary} />;
+      default: return <Heart size={32} color={appColors.primary} />;
+    }
+  };
+
   const renderItem = ({ item }: { item: WishlistItem }) => (
-    <Card style={commonStyles.itemCard}>
-      <Card.Content style={commonStyles.itemCardContent}>
-        <View style={commonStyles.itemHeader}>
-          <View style={commonStyles.iconContainer}>
-            <Heart color={getPriorityColor(item.priority || 'média')} size={24} />
-          </View>
-          <View style={[commonStyles.badge, { backgroundColor: `${getPriorityColor(item.priority || 'média')}20` }]}>
-            <Text style={[commonStyles.badgeText, { color: getPriorityColor(item.priority || 'média') }]}>
-              {item.priority ? item.priority.charAt(0).toUpperCase() + item.priority.slice(1) : 'Média'}
-            </Text>
-          </View>
+    <ItemCard
+      layout="grid"
+      title={item.name}
+      subtitle={item.type.charAt(0).toUpperCase() + item.type.slice(1)}
+      placeholderIcon={getIconForType(item.type)}
+      onPress={() => handleEdit(item)}
+      onLongPress={() => handleDelete(item.id)}
+      coverOverlay={
+        <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority || 'média') }]}>
+          <Text style={styles.priorityText}>
+            {item.priority ? item.priority.charAt(0).toUpperCase() + item.priority.slice(1) : 'Média'}
+          </Text>
         </View>
-        <Text style={commonStyles.itemTitle}>{item.name}</Text>
-        <Text style={commonStyles.itemSubtitle}>
-          {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
-          {item.estimatedPrice && ` • R$ ${item.estimatedPrice.toFixed(2)}`}
-        </Text>
-        {item.description && (
-          <Text style={styles.description}>{item.description}</Text>
-        )}
-        <View style={styles.itemActions}>
-          <IconButton
-            icon={() => <Edit color={theme.colors.onSurfaceVariant} size={20} />}
-            onPress={() => handleEdit(item)}
-            style={styles.actionButton}
-          />
-          <IconButton
-            icon={() => <Trash2 color={appColors.destructive} size={20} />}
-            onPress={() => handleDelete(item.id)}
-            style={styles.actionButton}
-          />
+      }
+      rightElement={
+        <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity onPress={() => handleEdit(item)} style={styles.actionButton}>
+            <Edit size={16} color={theme.colors.onSurfaceVariant} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => handleDelete(item.id)} style={[styles.actionButton, { marginLeft: 8 }]}>
+            <Trash2 size={16} color={appColors.destructive} />
+          </TouchableOpacity>
         </View>
-      </Card.Content>
-    </Card>
+      }
+      footer={
+        item.estimatedPrice && (
+          <View style={styles.priceContainer}>
+            <Text style={styles.priceLabel}>R$ {item.estimatedPrice.toFixed(2)}</Text>
+          </View>
+        )
+      }
+    />
   );
 
   const EmptyState = () => (
@@ -244,10 +252,12 @@ const WishlistScreen = () => {
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[
-          commonStyles.listContainer,
+          styles.listContentContainer,
           filteredItems.length === 0 && { flex: 1 }
         ]}
         ListEmptyComponent={EmptyState}
+        numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
       />
 
       <FAB
@@ -432,6 +442,44 @@ const WishlistScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  listContentContainer: {
+    padding: 8,
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+
+
+  priorityBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  priorityText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: 'bold',
+  },
+  priceContainer: {
+    marginTop: 4,
+    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  priceLabel: {
+    fontSize: 12,
+    color: appColors.primary,
+    fontWeight: '600',
+  },
+  actionButton: {
+    padding: 4,
+  },
   description: {
     fontSize: 14,
     color: '#94a3b8',
@@ -442,10 +490,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     marginTop: 12,
-  },
-  actionButton: {
-    margin: 0,
-    marginLeft: 8,
   },
   menuButton: {
     flexDirection: 'row',

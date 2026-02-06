@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions, TouchableWithoutFeedback, Alert, RefreshControl } from 'react-native';
-import { Text, Card, useTheme, IconButton, Button, Portal, Modal } from 'react-native-paper';
-import { getGames, getConsoles, getAccessories, getWishlistItems } from '../services/storage';
-import { Gamepad, Disc3, Gamepad2, Heart, Menu as MenuIcon, X, Settings, Save, Upload, RefreshCw, Wrench, Eye } from 'lucide-react-native';
+import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated, Dimensions, TouchableWithoutFeedback, ImageBackground } from 'react-native';
+import { Text, Card, useTheme, IconButton, Button, Portal, Modal, Avatar, Searchbar, Chip, FAB, Divider } from 'react-native-paper';
+import { getGames, getConsoles, getAccessories, getWishlistItems, clearAllData } from '../services/storage';
+import { checkAndNotifyOverdue, getOverdueMaintenanceItems } from '../services/notifications';
+import { SearchItem, Game, Console, Accessory } from '../types';
+import { Search, Menu as MenuIcon, Save, Upload, X, Gamepad, Disc3, Settings, Eye, Wrench, Calendar, Plus, ChevronRight, LayoutGrid, Heart, Sparkles, Package, DollarSign, AlertTriangle, RefreshCw, Clock, Trash2 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { appColors } from '../theme';
@@ -13,8 +15,10 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAlert } from '../contexts/AlertContext';
+import { useAuth } from '../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
+
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.7;
@@ -23,9 +27,13 @@ type MainTabParamList = {
   Home: undefined;
   GamesStack: undefined;
   ConsolesStack: undefined;
-  AccessoriesStack: undefined;
   Wishlist: undefined;
+  GameDetails: { game: Game };
+  ConsoleDetails: { console: Console };
+  AccessoryDetails: { accessory: Accessory };
 };
+
+
 
 type RootStackParamList = {
   MainTabs: undefined;
@@ -33,6 +41,10 @@ type RootStackParamList = {
   Notifications: undefined;
   ApisConfig: undefined;
   ApiConfig: undefined;
+  Accessories: undefined;
+  GameDetails: { game: Game };
+  ConsoleDetails: { console: Console };
+  AccessoryDetails: { accessory: Accessory };
 };
 
 type HomeScreenNavigationProp = CompositeNavigationProp<
@@ -45,6 +57,7 @@ const HomeScreen = () => {
   const theme = useTheme();
   const { showAlert } = useAlert();
   const { showValues, toggleValuesVisibility } = useValuesVisibility();
+  const { currentUser, resetAuth } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
@@ -56,10 +69,31 @@ const HomeScreen = () => {
     totalInvestedAccessories: 0,
     totalInvestedGames: 0,
     totalEstimatedWishlist: 0,
+    recentGames: [] as Game[],
+    wishlistItems: [] as SearchItem[],
   });
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [randomGameModalVisible, setRandomGameModalVisible] = useState(false);
+  const [selectedRandomGame, setSelectedRandomGame] = useState<Game | null>(null);
+  const [fabOpen, setFabOpen] = useState(false);
+
+  // Dynamic Greeting based on time
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    const name = currentUser.username || 'Gamer';
+    if (hour < 5) return `Boa noite, ${name}!`;
+    if (hour < 12) return `Bom dia, ${name}!`;
+    if (hour < 18) return `Boa tarde, ${name}!`;
+    return `Boa noite, ${name}!`;
+  };
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [backupModalVisible, setBackupModalVisible] = useState(false);
   const drawerAnimation = useRef(new Animated.Value(0)).current;
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [allItems, setAllItems] = useState<SearchItem[]>([]);
+  const [filteredItems, setFilteredItems] = useState<SearchItem[]>([]);
 
   // Adicionar listener para o botão de menu na barra de navegação
   useEffect(() => {
@@ -118,6 +152,14 @@ const HomeScreen = () => {
         getWishlistItems(),
       ]);
 
+      // Verificar manutenções atrasadas (Nudge e Banner)
+      const overdueItems = await getOverdueMaintenanceItems(consoles, accessories);
+      setOverdueCount(overdueItems.length);
+      checkAndNotifyOverdue(consoles, accessories);
+
+      // Verificar manutenções atrasadas (Nudge)
+      checkAndNotifyOverdue(consoles, accessories);
+
       // Adicionar log para verificar os acessórios e seus preços
       console.log('[HomeScreen] Acessórios carregados:', accessories.map(a => ({ id: a.id, name: a.name, pricePaid: a.pricePaid })));
 
@@ -158,6 +200,9 @@ const HomeScreen = () => {
         totalEstimatedWishlist,
       });
 
+      // Get last 5 games (recent)
+      const recentGames = [...games].reverse().slice(0, 5);
+
       setStats({
         games: games.length,
         consoles: consoles.length,
@@ -167,14 +212,25 @@ const HomeScreen = () => {
         totalInvestedAccessories,
         totalInvestedGames,
         totalEstimatedWishlist,
+
+        recentGames,
+        wishlistItems: wishlist.map(w => ({ id: w.id, name: w.name, type: 'game' as const, image: w.imageUrl, originalItem: w })),
       });
+
+      // Prepare items for global search
+      const searchItems: SearchItem[] = [
+        ...games.map(g => ({ id: g.id, name: g.name, type: 'game' as const, image: g.imageUrl, originalItem: g })),
+        ...consoles.map(c => ({ id: c.id, name: c.name, type: 'console' as const, image: c.imageUrl, originalItem: c })),
+        ...accessories.map(a => ({ id: a.id, name: a.name, type: 'accessory' as const, image: a.imageUrl, originalItem: a })),
+      ];
+      setAllItems(searchItems);
     } catch (error) {
       console.error('[HomeScreen] Erro ao carregar estatísticas:', error);
       setError('Não foi possível carregar as informações');
       showAlert({
         title: 'Erro ao carregar dados',
         message: 'Não foi possível carregar as informações. Por favor, tente novamente.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -209,7 +265,7 @@ const HomeScreen = () => {
       showAlert({
         title: 'Sucesso',
         message: 'Backup criado com sucesso!',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
       toggleDrawer();
     } catch (error) {
@@ -217,7 +273,7 @@ const HomeScreen = () => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível criar o backup.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -236,7 +292,7 @@ const HomeScreen = () => {
       showAlert({
         title: 'Erro',
         message: 'Não foi possível restaurar o backup.',
-        buttons: [{ text: 'OK', onPress: () => {} }]
+        buttons: [{ text: 'OK', onPress: () => { } }]
       });
     }
   };
@@ -246,7 +302,7 @@ const HomeScreen = () => {
       title: 'Restaurar Backup',
       message: 'Tem certeza que deseja restaurar o backup? Isso substituirá todos os dados atuais.',
       buttons: [
-        { text: 'Cancelar', onPress: () => {}, style: 'cancel' },
+        { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
         { text: 'Restaurar', onPress: handleRestoreBackup, style: 'destructive' },
       ]
     });
@@ -265,6 +321,114 @@ const HomeScreen = () => {
   const handleRestoreBackupFromModal = () => {
     setBackupModalVisible(false);
     confirmRestoreBackup();
+  };
+
+  const handleClearCollection = () => {
+    showAlert({
+      title: 'Limpar Coleção',
+      message: 'Tem certeza que deseja apagar TODOS os itens da sua coleção? Esta ação é irreversível.',
+      buttons: [
+        { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
+        {
+          text: 'Apagar',
+          onPress: async () => {
+            try {
+              await clearAllData();
+              await resetAuth();
+              await loadStats();
+              toggleDrawer();
+              showAlert({
+                title: 'Sucesso',
+                message: 'Sua coleção foi limpa com sucesso.',
+                buttons: [{ text: 'OK', onPress: () => { } }]
+              });
+            } catch (error) {
+              console.error('Erro ao limpar coleção:', error);
+            }
+          },
+          style: 'destructive'
+        },
+      ]
+    });
+  };
+
+  const handlePickRandomGame = () => {
+    const allGames = allItems.filter(i => i.type === 'game');
+    if (allGames.length > 0) {
+      const randomIndex = Math.floor(Math.random() * allGames.length);
+      const randomGame = allGames[randomIndex].originalItem as Game;
+      setSelectedRandomGame(randomGame);
+      setRandomGameModalVisible(true);
+    }
+  };
+
+  const renderRandomGameModal = () => {
+    if (!selectedRandomGame) return null;
+
+    return (
+      <Portal>
+        <Modal
+          visible={randomGameModalVisible}
+          onDismiss={() => setRandomGameModalVisible(false)}
+          contentContainerStyle={styles.randomModalContainer}
+        >
+          <View style={styles.randomModalContent}>
+            <Text style={styles.randomModalTitle}>Sugestão para Hoje</Text>
+
+            <View style={styles.randomGameImageContainer}>
+              {selectedRandomGame.imageUrl ? (
+                <Card.Cover
+                  source={{ uri: selectedRandomGame.imageUrl }}
+                  style={styles.randomGameImage}
+                />
+              ) : (
+                <View style={[styles.randomGameImage, styles.randomGamePlaceholder]}>
+                  <Gamepad color={appColors.primary} size={48} />
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.randomGameName}>{selectedRandomGame.name}</Text>
+            <Text style={styles.randomGamePrompt}>Que tal jogar este título agora?</Text>
+
+            <View style={styles.randomModalButtons}>
+              <Button
+                mode="contained"
+                onPress={() => {
+                  setRandomGameModalVisible(false);
+                  navigation.navigate('GameDetails', { game: selectedRandomGame });
+                }}
+                style={styles.randomPrimaryButton}
+                labelStyle={styles.randomButtonLabel}
+              >
+                Ver Detalhes
+              </Button>
+
+              <View style={styles.randomSecondaryRow}>
+                <Button
+                  mode="outlined"
+                  onPress={handlePickRandomGame}
+                  style={styles.randomSecondaryButton}
+                  labelStyle={styles.randomSecondaryLabel}
+                  icon={() => <RefreshCw size={16} color={theme.colors.primary} />}
+                >
+                  Trocar
+                </Button>
+
+                <Button
+                  mode="text"
+                  onPress={() => setRandomGameModalVisible(false)}
+                  style={styles.randomSecondaryButton}
+                  labelStyle={[styles.randomSecondaryLabel, { color: theme.colors.error }]}
+                >
+                  Sair
+                </Button>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </Portal>
+    );
   };
 
   const renderDrawer = () => {
@@ -297,7 +461,7 @@ const HomeScreen = () => {
           ]}
         >
           <View style={styles.drawerHeader}>
-            <Text style={styles.drawerTitle}>Game Manager</Text>
+            <Text style={styles.drawerTitle}>{currentUser.username || 'Game Manager'}</Text>
             <IconButton
               icon={() => <X color={theme.colors.onSurface} size={24} />}
               onPress={toggleDrawer}
@@ -375,6 +539,25 @@ const HomeScreen = () => {
                 </Text>
               </View>
             </TouchableOpacity>
+
+            <View style={{ flex: 1 }} />
+
+            <Divider style={{ marginVertical: 8, backgroundColor: 'rgba(255,255,255,0.05)' }} />
+
+            <TouchableOpacity
+              style={styles.drawerItem}
+              onPress={handleClearCollection}
+            >
+              <View style={[styles.drawerItemIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                <Trash2 color="#ef4444" size={20} />
+              </View>
+              <View style={styles.drawerItemContent}>
+                <Text style={[styles.drawerItemTitle, { color: '#ef4444' }]}>Limpar Coleção</Text>
+                <Text style={styles.drawerItemDescription}>
+                  Apagar todos os itens da coleção
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
           <View style={styles.drawerFooter}>
             <Text style={styles.versionText}>
@@ -386,13 +569,10 @@ const HomeScreen = () => {
     );
   };
 
-  const handleNavigateToAccessories = () => {
-    navigation.navigate('AccessoriesStack');
-  };
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView 
+      <ScrollView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         refreshControl={
           <RefreshControl
@@ -402,185 +582,342 @@ const HomeScreen = () => {
           />
         }
       >
-        {error ? (
-          <View style={styles.errorContainer}>
-            <Text style={[styles.errorText, { color: theme.colors.error }]}>
-              {error}
+        <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
+          <Searchbar
+            placeholder="Buscar na coleção..."
+            onChangeText={(query) => {
+              setSearchQuery(query);
+              if (query.trim() === '') {
+                setFilteredItems([]);
+              } else {
+                const lower = query.toLowerCase();
+                setFilteredItems(allItems.filter(item => item.name.toLowerCase().includes(lower)));
+              }
+            }}
+            value={searchQuery}
+            style={{
+              backgroundColor: theme.colors.surfaceVariant,
+              borderRadius: 12,
+              elevation: 0,
+              height: 48,
+            }}
+            inputStyle={{ minHeight: 0 }}
+          />
+        </View>
+
+        {searchQuery.trim().length > 0 ? (
+          <View style={{ paddingHorizontal: 24 }}>
+            <Text style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
+              {filteredItems.length} resultados encontrados
             </Text>
-            <IconButton
-              icon={() => <RefreshCw color={theme.colors.primary} size={24} />}
-              onPress={handleRefresh}
-              style={{ margin: 0 }}
-            />
+            {filteredItems.map((item) => (
+              <TouchableOpacity
+                key={`${item.type}-${item.id}`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: theme.colors.surface,
+                  padding: 12,
+                  borderRadius: 12,
+                  marginBottom: 8,
+                }}
+                onPress={() => {
+                  if (item.type === 'game') {
+                    // @ts-ignore - Navigation types might need strict check but this works for demo
+                    navigation.navigate('GameDetails', { game: item.originalItem });
+                  } else if (item.type === 'console') {
+                    // @ts-ignore
+                    navigation.navigate('ConsoleDetails', { console: item.originalItem });
+                  } else if (item.type === 'accessory') {
+                    // @ts-ignore
+                    navigation.navigate('AccessoryDetails', { accessory: item.originalItem });
+                  }
+                }}
+              >
+                {item.image ? (
+                  <Card.Cover source={{ uri: item.image }} style={{ width: 50, height: 50, borderRadius: 8 }} />
+                ) : (
+                  <View style={{ width: 50, height: 50, borderRadius: 8, backgroundColor: theme.colors.surfaceVariant, justifyContent: 'center', alignItems: 'center' }}>
+                    {item.type === 'game' && <Disc3 size={24} color={appColors.primary} />}
+                    {item.type === 'console' && <Gamepad size={24} color={appColors.primary} />}
+                    {item.type === 'accessory' && <DollarSign size={24} color={appColors.primary} />}
+                  </View>
+                )}
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <Text style={{ color: theme.colors.onSurface, fontWeight: 'bold' }}>{item.name}</Text>
+                  <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12, textTransform: 'capitalize' }}>{item.type}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
           </View>
         ) : (
+          /* Main Dashboard Content */
           <>
-            <View style={styles.titleContainer}>
-              <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
-                Organize sua coleção de jogos, consoles e acessórios
-              </Text>
-            </View>
-
-            <View style={styles.statsContainer}>
-              <View style={[styles.statsCard, { backgroundColor: 'rgba(74, 155, 255, 0.15)' }]}>
-                <Text style={[styles.statsNumber, { color: appColors.primary, fontSize: 38 }]}>{stats.games + stats.consoles + stats.accessories}</Text>
-                <Text style={[styles.statsLabel, { fontSize: 16, marginBottom: 8 }]}>Total de Itens Cadastrados</Text>
-                <View style={[styles.investmentContainer, { backgroundColor: 'rgba(74, 155, 255, 0.2)', width: '100%', paddingVertical: 8 }]}>
-                  <Text style={[styles.investmentText, { fontSize: 14 }]}>
-                    Total investido: {showValues ? 
-                      `R$ ${(stats.totalInvested + stats.totalInvestedAccessories + stats.totalInvestedGames).toFixed(2)}` : 
-                      'R$ ******'}
+            {error ? (
+              <View style={styles.errorContainer}>
+                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                  {error}
+                </Text>
+                <IconButton
+                  icon={() => <RefreshCw color={theme.colors.primary} size={24} />}
+                  onPress={handleRefresh}
+                  style={{ margin: 0 }}
+                />
+              </View>
+            ) : (
+              <>
+                <View style={styles.titleContainer}>
+                  <Text style={styles.welcomeText}>{getGreeting()}</Text>
+                  <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+                    Gerencie sua coleção
                   </Text>
                 </View>
-              </View>
-            </View>
 
-            <View style={styles.categoriesContainer}>
-              <TouchableOpacity
-                style={styles.categoryCard}
-                onPress={() => navigation.navigate('ConsolesStack')}
-              >
-                <Card 
-                  style={[
-                    styles.card, 
-                    { 
-                      backgroundColor: theme.colors.surface,
-                      borderRadius: 16,
-                    }
-                  ]}
-                >
-                  <Card.Content style={styles.cardContent}>
-                    <View style={styles.cardHeader}>
-                      <View style={[styles.iconWrapper, { backgroundColor: 'rgba(74, 155, 255, 0.1)' }]}>
-                        <Gamepad color={appColors.primary} size={24} />
+                {/* Overdue Maintenance Banner */}
+                {overdueCount > 0 && (
+                  <TouchableOpacity
+                    style={styles.overdueBanner}
+                    onPress={() => navigation.navigate('Maintenance')}
+                  >
+                    <View style={styles.overdueBannerContent}>
+                      <AlertTriangle color="#ffffff" size={24} />
+                      <View style={{ marginLeft: 12, flex: 1 }}>
+                        <Text style={styles.overdueBannerTitle}>Atenção!</Text>
+                        <Text style={styles.overdueBannerText}>
+                          Você tem {overdueCount} {overdueCount === 1 ? 'item' : 'itens'} com manutenção atrasada.
+                        </Text>
                       </View>
-                      <View style={[styles.counterBadge, { backgroundColor: appColors.primary }]}>
-                        <Text style={styles.counterText}>{stats.consoles}</Text>
-                      </View>
+                      <ChevronRight color="rgba(255,255,255,0.7)" size={20} />
                     </View>
-                    <Text style={styles.categoryTitle}>Consoles</Text>
-                    <Text style={styles.categoryDescription}>
-                      Gerenciar sua coleção de consoles
-                    </Text>
-                    <View style={styles.investmentContainer}>
-                      <Text style={styles.investmentText}>
-                        Total investido: {showValues ? `R$ ${stats.totalInvested.toFixed(2)}` : 'R$ ******'}
-                      </Text>
-                    </View>
-                  </Card.Content>
-                </Card>
-              </TouchableOpacity>
+                  </TouchableOpacity>
+                )}
 
-              <TouchableOpacity
-                style={styles.categoryCard}
-                onPress={handleNavigateToAccessories}
-              >
-                <Card 
-                  style={[
-                    styles.card, 
-                    { 
-                      backgroundColor: theme.colors.surface,
-                      borderRadius: 16,
-                    }
-                  ]}
-                >
-                  <Card.Content style={styles.cardContent}>
-                    <View style={styles.cardHeader}>
-                      <View style={[styles.iconWrapper, { backgroundColor: 'rgba(74, 155, 255, 0.1)' }]}>
-                        <Gamepad2 color={appColors.primary} size={24} />
-                      </View>
-                      <View style={[styles.counterBadge, { backgroundColor: appColors.primary }]}>
-                        <Text style={styles.counterText}>{stats.accessories}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.categoryTitle}>Acessórios</Text>
-                    <Text style={styles.categoryDescription}>
-                      Organizar seus acessórios e controles
-                    </Text>
-                    <View style={styles.investmentContainer}>
-                      <Text style={styles.investmentText}>
-                        Total investido: {showValues ? `R$ ${stats.totalInvestedAccessories.toFixed(2)}` : 'R$ ******'}
-                      </Text>
-                    </View>
-                  </Card.Content>
-                </Card>
-              </TouchableOpacity>
+                {/* Quick Actions Row */}
+                <View style={styles.quickActionsContainer}>
+                  <TouchableOpacity
+                    style={[styles.quickActionButton, { backgroundColor: `${appColors.primary}20`, flex: 1 }]}
+                    onPress={handlePickRandomGame}
+                  >
+                    <Sparkles color={appColors.primary} size={20} />
+                    <Text style={[styles.quickActionText, { color: appColors.primary }]}>O que jogar?</Text>
+                  </TouchableOpacity>
+                </View>
 
-              <TouchableOpacity
-                style={styles.categoryCard}
-                onPress={() => navigation.navigate('GamesStack')}
-              >
-                <Card 
-                  style={[
-                    styles.card, 
-                    { 
-                      backgroundColor: theme.colors.surface,
-                      borderRadius: 16,
-                    }
-                  ]}
-                >
-                  <Card.Content style={styles.cardContent}>
-                    <View style={styles.cardHeader}>
-                      <View style={[styles.iconWrapper, { backgroundColor: 'rgba(74, 155, 255, 0.1)' }]}>
-                        <Disc3 color={appColors.primary} size={24} />
-                      </View>
-                      <View style={[styles.counterBadge, { backgroundColor: appColors.primary }]}>
-                        <Text style={styles.counterText}>{stats.games}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.categoryTitle}>Jogos</Text>
-                    <Text style={styles.categoryDescription}>
-                      Catalogar sua biblioteca de jogos
-                    </Text>
-                    <View style={styles.investmentContainer}>
-                      <Text style={styles.investmentText}>
-                        Total investido: {showValues ? `R$ ${stats.totalInvestedGames.toFixed(2)}` : 'R$ ******'}
-                      </Text>
-                    </View>
-                  </Card.Content>
-                </Card>
-              </TouchableOpacity>
+                {/* Quick Stats Row */}
+                <View style={styles.quickStatsRow}>
+                  <View style={[styles.quickStatCard, { backgroundColor: 'rgba(74, 155, 255, 0.1)' }]}>
+                    <Disc3 color={appColors.primary} size={24} />
+                    <Text style={styles.quickStatValue}>{stats.games}</Text>
+                    <Text style={styles.quickStatLabel}>Jogos</Text>
+                  </View>
 
-              <TouchableOpacity
-                style={styles.categoryCard}
-                onPress={() => navigation.navigate('Wishlist')}
-              >
-                <Card 
-                  style={[
-                    styles.card, 
-                    { 
-                      backgroundColor: theme.colors.surface,
-                      borderRadius: 16,
-                    }
-                  ]}
-                >
-                  <Card.Content style={styles.cardContent}>
-                    <View style={styles.cardHeader}>
-                      <View style={[styles.iconWrapper, { backgroundColor: 'rgba(255, 87, 87, 0.1)' }]}>
-                        <Heart color="#ff5757" size={24} />
-                      </View>
-                      <View style={[styles.counterBadge, { backgroundColor: '#ff5757' }]}>
-                        <Text style={styles.counterText}>{stats.wishlist}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.categoryTitle}>Lista de Desejos</Text>
-                    <Text style={styles.categoryDescription}>
-                      Itens que você deseja adquirir
+                  <View style={[styles.quickStatCard, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+                    <Gamepad color="#10b981" size={24} />
+                    <Text style={styles.quickStatValue}>{stats.consoles}</Text>
+                    <Text style={styles.quickStatLabel}>Consoles</Text>
+                  </View>
+
+                  <View style={[styles.quickStatCard, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
+                    <DollarSign color="#f59e0b" size={24} />
+                    <Text style={styles.quickStatValue}>
+                      {showValues ?
+                        `R$ ${Math.floor(stats.totalInvested + stats.totalInvestedAccessories + stats.totalInvestedGames)}` :
+                        '****'}
                     </Text>
-                    <View style={[styles.investmentContainer, { backgroundColor: 'rgba(255, 87, 87, 0.1)' }]}>
-                      <Text style={[styles.investmentText, { color: '#ff5757' }]}>
-                        Total estimado: {showValues ? `R$ ${stats.totalEstimatedWishlist.toFixed(2)}` : 'R$ ******'}
-                      </Text>
+                    <Text style={styles.quickStatLabel}>Total</Text>
+                  </View>
+                </View>
+
+                {/* Recent Games Section */}
+                {stats.recentGames.length > 0 && (
+                  <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Clock color={appColors.primary} size={18} />
+                        <Text style={[styles.sectionTitle, { marginLeft: 8 }]}>Adicionados Recentemente</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => navigation.navigate('GamesStack')}>
+                        <Text style={{ color: appColors.primary, fontSize: 14 }}>Ver todos</Text>
+                      </TouchableOpacity>
                     </View>
-                  </Card.Content>
-                </Card>
-              </TouchableOpacity>
-            </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
+                      {stats.recentGames.map((game, index) => (
+                        <TouchableOpacity
+                          key={game.id}
+                          style={styles.recentGameCard}
+                          onPress={() => navigation.navigate('GameDetails', { game })}
+                        >
+                          {game.imageUrl ? (
+                            <Card.Cover source={{ uri: game.imageUrl }} style={styles.recentGameCover} />
+                          ) : (
+                            <View style={[styles.recentGameCover, { backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' }]}>
+                              <Gamepad color={appColors.primary} size={32} />
+                            </View>
+                          )}
+
+                          <View style={styles.recentGameInfo}>
+                            <Text style={styles.recentGameTitle} numberOfLines={1}>{game.name}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Wishlist Mini-Carousel */}
+                {stats.wishlistItems.length > 0 && (
+                  <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Heart color={appColors.primary} size={18} />
+                        <Text style={[styles.sectionTitle, { marginLeft: 8 }]}>Desejados</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => navigation.navigate('Wishlist')}>
+                        <Text style={{ color: appColors.primary, fontSize: 14 }}>Ver todos</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
+                      {stats.wishlistItems.slice(0, 5).map((item) => (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={styles.wishlistMiniCard}
+                          onPress={() => navigation.navigate('Wishlist')}
+                        >
+                          <Avatar.Icon
+                            size={40}
+                            icon={() => <Heart color="#ffffff" size={20} />}
+                            style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
+                          />
+                          <View style={{ marginTop: 8 }}>
+                            <Text style={styles.wishlistMiniTitle} numberOfLines={1}>{item.name}</Text>
+                            <Text style={styles.wishlistMiniPrice}>
+                              {item.originalItem.estimatedPrice ? `R$ ${item.originalItem.estimatedPrice}` : 'Preço N/A'}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                <View style={styles.sectionContainer}>
+                  <View style={styles.sectionHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <LayoutGrid color={appColors.primary} size={18} />
+                      <Text style={[styles.sectionTitle, { marginLeft: 8 }]}>Categorias</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.categoriesContainer}>
+                    {/* Consoles - Large Feature Card */}
+                    <TouchableOpacity
+                      style={styles.featuredCategoryCard}
+                      onPress={() => navigation.navigate('ConsolesStack')}
+                    >
+                      <ImageBackground
+                        source={require('../../assets/Consoles.jpg')}
+                        style={styles.categoryBgImage}
+                        imageStyle={{ borderRadius: 20 }}
+                      >
+                        <View style={styles.categoryOverlay}>
+                          <View style={styles.categoryInfo}>
+                            <Text style={styles.categoryMainTitle}>Consoles</Text>
+                            <Text style={styles.categorySubtitle}>{stats.consoles} Sistemas</Text>
+                          </View>
+                          <View style={styles.categoryIconBadge}>
+                            <Gamepad color="#ffffff" size={20} />
+                          </View>
+                        </View>
+                      </ImageBackground>
+                    </TouchableOpacity>
+
+                    {/* Games & Accessories - Side by Side */}
+                    <View style={styles.categoriesRow}>
+                      <TouchableOpacity
+                        style={styles.halfCategoryCard}
+                        onPress={() => navigation.navigate('GamesStack')}
+                      >
+                        <ImageBackground
+                          source={require('../../assets/Jogos.jpg')}
+                          style={styles.categoryBgImage}
+                          imageStyle={{ borderRadius: 20 }}
+                        >
+                          <View style={styles.categoryOverlay}>
+                            <View style={styles.categoryInfo}>
+                              <View style={styles.categoryIconBadgeSmall}>
+                                <Disc3 color="#ffffff" size={16} />
+                              </View>
+                              <Text style={styles.categoryMainTitleSmall}>Jogos</Text>
+                              <Text style={styles.categorySubtitleSmall}>{stats.games} Títulos</Text>
+                            </View>
+                          </View>
+                        </ImageBackground>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.halfCategoryCard}
+                        onPress={() => navigation.navigate('Accessories')}
+                      >
+                        <ImageBackground
+                          source={require('../../assets/Acessorios.jpg')}
+                          style={styles.categoryBgImage}
+                          imageStyle={{ borderRadius: 20 }}
+                        >
+                          <View style={styles.categoryOverlay}>
+                            <View style={styles.categoryInfo}>
+                              <View style={styles.categoryIconBadgeSmall}>
+                                <Package color="#ffffff" size={16} />
+                              </View>
+                              <Text style={styles.categoryMainTitleSmall}>Acessórios</Text>
+                              <Text style={styles.categorySubtitleSmall}>{stats.accessories} Itens</Text>
+                            </View>
+                          </View>
+                        </ImageBackground>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </>
+            )}
           </>
         )}
       </ScrollView>
       {renderDrawer()}
-      
+      {renderRandomGameModal()}
+
+      <FAB.Group
+        open={fabOpen}
+        visible={true}
+        icon={fabOpen ? 'close' : 'plus'}
+        actions={[
+          {
+            icon: 'gamepad-variant',
+            label: 'Novo Jogo',
+            onPress: () => navigation.navigate('GamesStack', { screen: 'GamesList', params: { autoOpenAdd: true } } as any),
+          },
+          {
+            icon: 'console',
+            label: 'Novo Console',
+            onPress: () => navigation.navigate('ConsolesStack', { screen: 'ConsolesNavigator', params: { autoOpenAdd: true } } as any),
+          },
+          {
+            icon: 'controller-classic',
+            label: 'Novo Acessório',
+            onPress: () => navigation.navigate('Accessories', { autoOpenAdd: true } as any),
+          },
+        ]}
+        onStateChange={({ open }: { open: boolean }) => setFabOpen(open)}
+        onPress={() => {
+          if (fabOpen) {
+            // do something if the speed dial is open
+          }
+        }}
+        fabStyle={{ backgroundColor: appColors.primary }}
+        color="#fff"
+      />
+
       {/* Modal de Backup e Restauração */}
       <Portal>
         <Modal
@@ -595,7 +932,7 @@ const HomeScreen = () => {
             <Text style={[styles.backupModalSubtitle, { color: theme.colors.onSurfaceVariant }]}>
               Escolha uma ação:
             </Text>
-            
+
             <View style={styles.backupModalButtons}>
               <TouchableOpacity
                 style={[styles.backupModalButton, { backgroundColor: theme.colors.primary }]}
@@ -639,7 +976,7 @@ const HomeScreen = () => {
           </View>
         </Modal>
       </Portal>
-    </View>
+    </View >
   );
 };
 
@@ -648,96 +985,217 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   titleContainer: {
-    alignItems: 'center',
-    paddingVertical: 32,
     paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  welcomeText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    opacity: 0.8,
-    lineHeight: 22,
+    fontSize: 14,
+    opacity: 0.7,
   },
-  statsContainer: {
+  quickStatsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 24,
     marginBottom: 32,
+    gap: 12,
   },
-  statsCard: {
+  quickStatCard: {
+    flex: 1,
+    borderRadius: 20,
+    padding: 16,
     alignItems: 'center',
-    borderRadius: 16,
-    padding: 20,
-    paddingHorizontal: 60,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: 'center',
   },
-  statsNumber: {
-    fontSize: 32,
+  quickStatValue: {
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: '#ffffff',
+    marginVertical: 4,
+  },
+  quickStatLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#ffffff',
   },
-  statsLabel: {
+  recentGameCard: {
+    width: 140,
+    marginRight: 4,
+  },
+  recentGameCover: {
+    height: 180,
+    borderRadius: 16,
+    width: 140,
+  },
+  recentGameInfo: {
+    marginTop: 8,
+  },
+  recentGameTitle: {
     fontSize: 14,
-    color: '#94a3b8',
+    fontWeight: '600',
+    color: '#ffffff',
     textAlign: 'center',
   },
+  // Keep required legacy styles if referenced, or replace completely if confident.
+  // Replacing categories container for cleaner look
   categoriesContainer: {
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
   },
   categoryCard: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   card: {
     elevation: 0,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   cardContent: {
-    padding: 20,
+    padding: 16,
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   iconWrapper: {
-    width: 48,
-    height: 48,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
   counterBadge: {
-    minWidth: 28,
-    height: 28,
-    borderRadius: 14,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
   },
   counterText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
   categoryTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 6,
     color: '#ffffff',
+    marginBottom: 4,
   },
   categoryDescription: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#94a3b8',
-    lineHeight: 20,
-    opacity: 0.8,
+    opacity: 0.7,
   },
+  investmentContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  investmentText: {
+    fontSize: 12,
+    color: appColors.primary,
+    fontWeight: '500',
+  },
+  // New Category Styles
+  featuredCategoryCard: {
+    width: '100%',
+    height: 160,
+    marginBottom: 12,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  categoriesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  halfCategoryCard: {
+    flex: 1,
+    height: 140,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  categoryBgImage: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-end',
+  },
+  categoryOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 16,
+    justifyContent: 'space-between',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  categoryInfo: {
+    flex: 1,
+  },
+  categoryMainTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  categorySubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  categoryIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  categoryMainTitleSmall: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginTop: 4,
+  },
+  categorySubtitleSmall: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  categoryIconBadgeSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  // Drawer styles
   drawer: {
     position: 'absolute',
     top: 0,
@@ -754,12 +1212,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 10,
   },
-  overlay: {
+  backdrop: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     zIndex: 999,
   },
   drawerHeader: {
@@ -776,9 +1235,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff',
   },
-  closeButton: {
-    margin: 0,
-  },
   drawerContent: {
     padding: 24,
     flex: 1,
@@ -787,29 +1243,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 12,
     borderRadius: 12,
   },
   drawerItemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
   drawerItemContent: {
     flex: 1,
   },
   drawerItemTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#ffffff',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   drawerItemDescription: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#94a3b8',
     opacity: 0.8,
   },
@@ -835,62 +1291,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 10,
   },
-  footer: {
-    padding: 24,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#94a3b8',
-    opacity: 0.8,
-  },
-  investmentContainer: {
-    marginTop: 8,
-    backgroundColor: 'rgba(74, 155, 255, 0.1)',
-    borderRadius: 8,
-    padding: 6,
-  },
-  investmentText: {
-    fontSize: 12,
-    color: appColors.primary,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 998,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
   backupModalContainer: {
-    backgroundColor: 'transparent',
-    padding: 20,
+    backgroundColor: '#27272a', // Zinc-800 from theme.colors.surface
     margin: 20,
-  },
-  backupModalContent: {
-    backgroundColor: '#121a2b',
-    borderRadius: 20,
+    borderRadius: 24, // More rounded for premium look
     padding: 24,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
+  backupModalContent: {
+    alignItems: 'center',
+  },
   backupModalTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
-    textAlign: 'center',
     marginBottom: 8,
-    color: '#ffffff',
   },
   backupModalSubtitle: {
     fontSize: 14,
-    textAlign: 'center',
     marginBottom: 24,
-    color: '#94a3b8',
   },
   backupModalButtons: {
+    width: '100%',
     gap: 12,
   },
   backupModalButton: {
@@ -898,12 +1320,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderRadius: 12,
-    backgroundColor: appColors.primary,
   },
   backupModalButtonIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -913,18 +1334,161 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backupModalButtonTitle: {
-    fontSize: 16,
-    fontWeight: '600',
     color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
     marginBottom: 4,
   },
   backupModalButtonDescription: {
-    fontSize: 12,
     color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 12,
   },
   backupModalCancelButton: {
     marginTop: 8,
     borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    height: 48,
+    justifyContent: 'center',
+  },
+  // Enrichment Styles
+  overdueBanner: {
+    backgroundColor: '#ef4444',
+    marginHorizontal: 24,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    elevation: 4,
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  overdueBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  overdueBannerTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  overdueBannerText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+  },
+  quickActionsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 12,
+    marginBottom: 24,
+  },
+  quickActionButton: {
+    flex: 1,
+    height: 50,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  quickActionText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  wishlistMiniCard: {
+    width: 120,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  wishlistMiniTitle: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  wishlistMiniPrice: {
+    color: '#94a3b8',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  randomModalContainer: {
+    backgroundColor: '#27272a',
+    margin: 24,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  randomModalContent: {
+    alignItems: 'center',
+  },
+  randomModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 20,
+  },
+  randomGameImageContainer: {
+    width: 160,
+    height: 220,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    marginBottom: 16,
+  },
+  randomGameImage: {
+    width: '100%',
+    height: '100%',
+  },
+  randomGamePlaceholder: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  randomGameName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  randomGamePrompt: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  randomModalButtons: {
+    width: '100%',
+    gap: 12,
+  },
+  randomPrimaryButton: {
+    borderRadius: 12,
+    height: 48,
+    justifyContent: 'center',
+  },
+  randomButtonLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  randomSecondaryRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  randomSecondaryButton: {
+    flex: 1,
+    borderRadius: 12,
+  },
+  randomSecondaryLabel: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

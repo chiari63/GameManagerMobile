@@ -20,7 +20,7 @@ export const initializeStorage = async (): Promise<void> => {
     accessories: [],
     wishlist: []
   };
-  
+
   try {
     const existingData = await AsyncStorage.getItem(STORAGE_KEY);
     if (!existingData) {
@@ -31,18 +31,34 @@ export const initializeStorage = async (): Promise<void> => {
   }
 };
 
+// Cache em memória para evitar leituras repetidas do disco
+let memoryCache: StorageData | null = null;
+
+// Função para limpar o cache (útil para reload forçado)
+export const clearMemoryCache = () => {
+  memoryCache = null;
+};
+
 // Função para obter todos os dados do armazenamento
 export const getStorageData = async (): Promise<StorageData> => {
-  console.log('[Storage] Tentando obter dados do armazenamento');
+  // Se temos dados em cache, retorna eles imediatamente
+  if (memoryCache) {
+    return memoryCache;
+  }
+
+  console.log('[Storage] Cache vazio, lendo do disco...');
   try {
     const data = await AsyncStorage.getItem(STORAGE_KEY);
     if (!data) {
       console.log('[Storage] Nenhum dado encontrado, inicializando armazenamento');
       await initializeStorage();
-      return { games: [], consoles: [], accessories: [], wishlist: [] };
+      memoryCache = { games: [], consoles: [], accessories: [], wishlist: [] };
+      return memoryCache;
     }
-    console.log('[Storage] Dados obtidos com sucesso');
-    return JSON.parse(data);
+
+    memoryCache = JSON.parse(data);
+    console.log('[Storage] Dados carregados para o cache');
+    return memoryCache!;
   } catch (error) {
     console.error('[Storage] Erro crítico ao obter dados:', error);
     throw new Error('Falha ao acessar o armazenamento local');
@@ -51,10 +67,14 @@ export const getStorageData = async (): Promise<StorageData> => {
 
 // Função para salvar todos os dados no armazenamento
 export const saveStorageData = async (data: StorageData): Promise<void> => {
-  console.log('[Storage] Tentando salvar dados no armazenamento');
+  // Atualiza cache imediatamente
+  memoryCache = data;
+
+  // Persiste no disco
+  // Nota: Em uma aplicação maior, poderíamos usar debounce aqui
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    console.log('[Storage] Dados salvos com sucesso');
+    console.log('[Storage] Dados persistidos com sucesso');
   } catch (error) {
     console.error('[Storage] Erro crítico ao salvar dados:', error);
     throw new Error('Falha ao salvar no armazenamento local');
@@ -68,6 +88,9 @@ export const getGames = async (): Promise<Game[]> => {
 };
 
 export const addGame = async (gameData: Omit<Game, 'id'>): Promise<Game> => {
+  if (!gameData.name || gameData.name.trim() === '') {
+    throw new Error('Nome do jogo é obrigatório');
+  }
   const data = await getStorageData();
   const newGame = { ...gameData, id: generateId() };
   data.games.push(newGame);
@@ -77,7 +100,7 @@ export const addGame = async (gameData: Omit<Game, 'id'>): Promise<Game> => {
 
 export const updateGame = async (id: string, gameData: Partial<Game>): Promise<void> => {
   const data = await getStorageData();
-  data.games = data.games.map(game => 
+  data.games = data.games.map(game =>
     game.id === id ? { ...game, ...gameData } : game
   );
   await saveStorageData(data);
@@ -96,8 +119,11 @@ export const getConsoles = async (): Promise<Console[]> => {
 };
 
 export const addConsole = async (consoleData: Omit<Console, 'id'>): Promise<Console> => {
+  if (!consoleData.name || consoleData.name.trim() === '') {
+    throw new Error('Nome do console é obrigatório');
+  }
   const data = await getStorageData();
-  
+
   // Calcular próxima data de manutenção se aplicável
   let nextMaintenanceDate = undefined;
   if (consoleData.lastMaintenanceDate && consoleData.maintenanceInterval) {
@@ -106,16 +132,16 @@ export const addConsole = async (consoleData: Omit<Console, 'id'>): Promise<Cons
       consoleData.maintenanceInterval
     );
   }
-  
-  const newConsole = { 
-    ...consoleData, 
+
+  const newConsole = {
+    ...consoleData,
     id: generateId(),
     nextMaintenanceDate
   };
-  
+
   data.consoles.push(newConsole);
   await saveStorageData(data);
-  
+
   // Agendar notificação se necessário
   if (newConsole.notifyMaintenance && newConsole.nextMaintenanceDate) {
     await scheduleMaintenanceNotification(
@@ -125,47 +151,47 @@ export const addConsole = async (consoleData: Omit<Console, 'id'>): Promise<Cons
       newConsole.nextMaintenanceDate
     );
   }
-  
+
   return newConsole;
 };
 
 export const updateConsole = async (id: string, consoleData: Partial<Console>): Promise<void> => {
   const data = await getStorageData();
-  
+
   // Encontrar o console atual
   const currentConsole = data.consoles.find(consoleItem => consoleItem.id === id);
   if (!currentConsole) {
     throw new Error('Console não encontrado');
   }
-  
+
   // Verificar se precisamos recalcular a próxima data de manutenção
   let nextMaintenanceDate = currentConsole.nextMaintenanceDate;
-  const shouldRecalculate = 
+  const shouldRecalculate =
     (consoleData.lastMaintenanceDate && consoleData.lastMaintenanceDate !== currentConsole.lastMaintenanceDate) ||
     (consoleData.maintenanceInterval && consoleData.maintenanceInterval !== currentConsole.maintenanceInterval);
-  
+
   if (shouldRecalculate) {
     const lastMaintenanceDate = consoleData.lastMaintenanceDate || currentConsole.lastMaintenanceDate;
     const maintenanceInterval = consoleData.maintenanceInterval || currentConsole.maintenanceInterval;
-    
+
     if (lastMaintenanceDate && maintenanceInterval) {
       nextMaintenanceDate = calculateNextMaintenanceDate(lastMaintenanceDate, maintenanceInterval);
     }
   }
-  
+
   // Atualizar o console
-  const updatedConsole = { 
-    ...currentConsole, 
+  const updatedConsole = {
+    ...currentConsole,
     ...consoleData,
     nextMaintenanceDate
   };
-  
-  data.consoles = data.consoles.map(consoleItem => 
+
+  data.consoles = data.consoles.map(consoleItem =>
     consoleItem.id === id ? updatedConsole : consoleItem
   );
-  
+
   await saveStorageData(data);
-  
+
   // Atualizar notificação se necessário
   if (updatedConsole.notifyMaintenance && updatedConsole.nextMaintenanceDate) {
     await scheduleMaintenanceNotification(
@@ -190,8 +216,11 @@ export const getAccessories = async (): Promise<Accessory[]> => {
 };
 
 export const addAccessory = async (accessoryData: Omit<Accessory, 'id'>): Promise<Accessory> => {
+  if (!accessoryData.name || accessoryData.name.trim() === '') {
+    throw new Error('Nome do acessório é obrigatório');
+  }
   const data = await getStorageData();
-  
+
   // Calcular próxima data de manutenção se aplicável
   let nextMaintenanceDate = undefined;
   if (accessoryData.lastMaintenanceDate && accessoryData.maintenanceInterval) {
@@ -200,16 +229,16 @@ export const addAccessory = async (accessoryData: Omit<Accessory, 'id'>): Promis
       accessoryData.maintenanceInterval
     );
   }
-  
-  const newAccessory = { 
-    ...accessoryData, 
+
+  const newAccessory = {
+    ...accessoryData,
     id: generateId(),
     nextMaintenanceDate
   };
-  
+
   data.accessories.push(newAccessory);
   await saveStorageData(data);
-  
+
   // Agendar notificação se necessário
   if (newAccessory.notifyMaintenance && newAccessory.nextMaintenanceDate) {
     await scheduleMaintenanceNotification(
@@ -219,47 +248,47 @@ export const addAccessory = async (accessoryData: Omit<Accessory, 'id'>): Promis
       newAccessory.nextMaintenanceDate
     );
   }
-  
+
   return newAccessory;
 };
 
 export const updateAccessory = async (id: string, accessoryData: Partial<Accessory>): Promise<void> => {
   const data = await getStorageData();
-  
+
   // Encontrar o acessório atual
   const currentAccessory = data.accessories.find(accessory => accessory.id === id);
   if (!currentAccessory) {
     throw new Error('Acessório não encontrado');
   }
-  
+
   // Verificar se precisamos recalcular a próxima data de manutenção
   let nextMaintenanceDate = currentAccessory.nextMaintenanceDate;
-  const shouldRecalculate = 
+  const shouldRecalculate =
     (accessoryData.lastMaintenanceDate && accessoryData.lastMaintenanceDate !== currentAccessory.lastMaintenanceDate) ||
     (accessoryData.maintenanceInterval && accessoryData.maintenanceInterval !== currentAccessory.maintenanceInterval);
-  
+
   if (shouldRecalculate) {
     const lastMaintenanceDate = accessoryData.lastMaintenanceDate || currentAccessory.lastMaintenanceDate;
     const maintenanceInterval = accessoryData.maintenanceInterval || currentAccessory.maintenanceInterval;
-    
+
     if (lastMaintenanceDate && maintenanceInterval) {
       nextMaintenanceDate = calculateNextMaintenanceDate(lastMaintenanceDate, maintenanceInterval);
     }
   }
-  
+
   // Atualizar o acessório
-  const updatedAccessory = { 
-    ...currentAccessory, 
+  const updatedAccessory = {
+    ...currentAccessory,
     ...accessoryData,
     nextMaintenanceDate
   };
-  
-  data.accessories = data.accessories.map(accessory => 
+
+  data.accessories = data.accessories.map(accessory =>
     accessory.id === id ? updatedAccessory : accessory
   );
-  
+
   await saveStorageData(data);
-  
+
   // Atualizar notificação se necessário
   if (updatedAccessory.notifyMaintenance && updatedAccessory.nextMaintenanceDate) {
     await scheduleMaintenanceNotification(
@@ -293,7 +322,7 @@ export const addWishlistItem = async (itemData: Omit<WishlistItem, 'id'>): Promi
 
 export const updateWishlistItem = async (id: string, itemData: Partial<WishlistItem>): Promise<void> => {
   const data = await getStorageData();
-  data.wishlist = data.wishlist.map(item => 
+  data.wishlist = data.wishlist.map(item =>
     item.id === id ? { ...item, ...itemData } : item
   );
   await saveStorageData(data);
@@ -303,4 +332,28 @@ export const deleteWishlistItem = async (id: string): Promise<void> => {
   const data = await getStorageData();
   data.wishlist = data.wishlist.filter(item => item.id !== id);
   await saveStorageData(data);
+};
+
+/**
+ * Limpa todos os dados do armazenamento (coleção completa)
+ */
+export const clearAllData = async (): Promise<void> => {
+  try {
+    const emptyData: StorageData = {
+      games: [],
+      consoles: [],
+      accessories: [],
+      wishlist: []
+    };
+
+    // Limpar cache em memória
+    memoryCache = emptyData;
+
+    // Persistir dados vazios no disco
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(emptyData));
+    console.log('[Storage] Coleção limpa com sucesso');
+  } catch (error) {
+    console.error('[Storage] Erro ao limpar todos os dados:', error);
+    throw new Error('Falha ao limpar a coleção');
+  }
 }; 
