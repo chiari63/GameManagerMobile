@@ -9,7 +9,8 @@ import {
   MainTabParamList,
   RootStackParamList,
   ConsolesStackParamList,
-  GamesStackParamList
+  GamesStackParamList,
+  HomeStackParamList
 } from './types';
 import { darkTheme } from '../theme';
 
@@ -52,6 +53,7 @@ const navigationTheme = {
 const MainTab = createBottomTabNavigator<MainTabParamList>();
 const ConsolesStack = createNativeStackNavigator<ConsolesStackParamList>();
 const GamesStack = createNativeStackNavigator<GamesStackParamList>();
+const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 // Navegador da pilha de consoles
@@ -73,7 +75,7 @@ const ConsolesNavigator = () => {
         name="ConsolesList"
         component={ConsolesScreen}
         options={{
-          title: 'Consoles',
+          headerShown: false,
         }}
       />
       <ConsolesStack.Screen
@@ -81,6 +83,7 @@ const ConsolesNavigator = () => {
         component={ConsoleDetailsScreen}
         options={{
           title: 'Detalhes',
+          headerShown: false,
         }}
       />
     </ConsolesStack.Navigator>
@@ -107,6 +110,7 @@ const GamesNavigator = () => {
         component={GamesScreen}
         options={{
           title: 'Jogos',
+          headerShown: false,
         }}
       />
       <GamesStack.Screen
@@ -114,9 +118,75 @@ const GamesNavigator = () => {
         component={GameDetailsScreen}
         options={{
           title: 'Detalhes',
+          headerShown: false,
         }}
       />
     </GamesStack.Navigator>
+  );
+};
+
+// Navegador da pilha inicial (Home + Accessories + Outros)
+const HomeNavigator = () => {
+  const theme = useTheme();
+
+  return (
+    <HomeStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.onSurface,
+        headerShadowVisible: false,
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+      }}
+    >
+      <HomeStack.Screen
+        name="HomeMain"
+        component={HomeScreen}
+        options={{
+          title: 'Início',
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: theme.colors.background,
+          },
+          headerTintColor: theme.colors.onSurface,
+          headerTitleStyle: {
+            fontSize: 22,
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <HomeStack.Screen
+        name="Accessories"
+        component={AccessoriesScreen}
+        options={{ title: 'Meus Acessórios' }}
+      />
+      <HomeStack.Screen
+        name="AccessoryDetails"
+        component={AccessoryDetailsScreen}
+        options={{ title: 'Detalhes do Acessório', headerShown: false }}
+      />
+      <HomeStack.Screen
+        name="Maintenance"
+        component={MaintenanceScreen}
+        options={{ title: 'Manutenções' }}
+      />
+      <HomeStack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ title: 'Notificações' }}
+      />
+      <HomeStack.Screen
+        name="ApisConfig"
+        component={ApisConfigScreen}
+        options={{ title: 'Configurar APIs' }}
+      />
+      <HomeStack.Screen
+        name="ApiConfig"
+        component={ApiConfigScreen}
+        options={{ title: 'API IGDB', headerTitle: 'Configuração IGDB' }}
+      />
+    </HomeStack.Navigator>
   );
 };
 
@@ -126,7 +196,7 @@ const MainTabNavigator = () => {
 
   return (
     <MainTab.Navigator
-      initialRouteName="Home"
+      initialRouteName="HomeStack"
       screenOptions={{
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
@@ -146,22 +216,10 @@ const MainTabNavigator = () => {
       }}
     >
       <MainTab.Screen
-        name="Home"
-        component={HomeScreen}
+        name="HomeStack"
+        component={HomeNavigator}
         options={{
           title: 'Início',
-          headerShown: true,
-          headerStyle: {
-            backgroundColor: theme.colors.background, // Match background for clean look
-            elevation: 0,
-            shadowOpacity: 0,
-            borderBottomWidth: 0,
-          },
-          headerTintColor: theme.colors.onSurface,
-          headerTitleStyle: {
-            fontSize: 22,
-            fontWeight: 'bold',
-          },
           tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
         }}
       />
@@ -186,10 +244,10 @@ const MainTabNavigator = () => {
         component={WishlistScreen}
         options={{
           title: 'Desejos',
-          tabBarIcon: ({ color, size }) => <Heart color={color === theme.colors.primary ? '#ff5757' : color} size={size} />,
+          tabBarIcon: ({ color, size }) => <Heart color={color} size={size} />,
           tabBarLabel: ({ color, focused }) => (
             <Text style={{
-              color: focused ? '#ff5757' : color,
+              color: color,
               fontSize: 10,
               marginBottom: 2,
               fontWeight: '500'
@@ -197,17 +255,7 @@ const MainTabNavigator = () => {
               Desejos
             </Text>
           ),
-          headerShown: true,
-          headerStyle: {
-            backgroundColor: theme.colors.surface,
-            elevation: 0,
-            shadowOpacity: 0,
-          },
-          headerTintColor: theme.colors.onSurface,
-          headerTitleStyle: {
-            fontSize: 22,
-            fontWeight: 'bold',
-          },
+          headerShown: false,
         }}
       />
     </MainTab.Navigator>
@@ -249,9 +297,9 @@ const AppNavigator = () => {
         ) : (
           <>
             <Stack.Screen name="MainTabs" component={MainTabNavigator} options={{ headerShown: false }} />
-            <Stack.Screen name="GameDetails" component={GameDetailsScreen} options={{ title: 'Detalhes do Jogo' }} />
-            <Stack.Screen name="ConsoleDetails" component={ConsoleDetailsScreen} options={{ title: 'Detalhes do Console' }} />
-            <Stack.Screen name="AccessoryDetails" component={AccessoryDetailsScreen} options={{ title: 'Detalhes do Acessório' }} />
+            <Stack.Screen name="GameDetails" component={GameDetailsScreen} options={{ title: 'Detalhes do Jogo', headerShown: false }} />
+            <Stack.Screen name="ConsoleDetails" component={ConsoleDetailsScreen} options={{ title: 'Detalhes do Console', headerShown: false }} />
+            <Stack.Screen name="AccessoryDetails" component={AccessoryDetailsScreen} options={{ title: 'Detalhes do Acessório', headerShown: false }} />
             <Stack.Screen name="Accessories" component={AccessoriesScreen} options={{ title: 'Meus Acessórios' }} />
             <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ title: 'Manutenções' }} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notificações' }} />

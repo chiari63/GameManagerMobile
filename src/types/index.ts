@@ -60,6 +60,7 @@ export interface Console {
   imageUrl?: string;
   condition?: string;
   pricePaid?: number;
+  description?: string;
 }
 
 export interface Accessory {
@@ -76,12 +77,13 @@ export interface Accessory {
   imageUrl?: string;
   condition?: string;
   pricePaid?: number;
+  description?: string;
 }
 
 export interface WishlistItem {
   id: string;
   name: string;
-  type: 'game' | 'console' | 'accessory' | 'other';
+  type: 'game' | 'console' | 'accessory';
   description?: string;
   priority?: 'baixa' | 'média' | 'alta';
   estimatedPrice?: number;

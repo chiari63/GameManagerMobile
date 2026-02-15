@@ -1,10 +1,20 @@
 import { Game, Console, Accessory } from '../types';
 
 // Definição dos tipos para as pilhas de navegação
+export type HomeStackParamList = {
+  HomeMain: undefined;
+  Accessories: { autoOpenAdd?: boolean; editingAccessory?: Accessory };
+  AccessoryDetails: { accessory: Accessory };
+  Maintenance: undefined;
+  Notifications: undefined;
+  ApisConfig: undefined;
+  ApiConfig: undefined;
+};
+
 export type MainTabParamList = {
   ConsolesStack: undefined;
   GamesStack: undefined;
-  Home: undefined;
+  HomeStack: undefined;
   Wishlist: undefined;
   MainTabs: undefined;
   GameDetails: { game: Game };
@@ -20,7 +30,7 @@ export type RootStackParamList = {
   GameDetails: { id: string };
   Consoles: undefined;
   ConsoleDetails: { id: string };
-  Accessories: { autoOpenAdd?: boolean };
+  Accessories: { autoOpenAdd?: boolean; editingAccessory?: Accessory };
   AccessoryDetails: { id: string };
   Maintenance: undefined;
   Notifications: undefined;
@@ -33,14 +43,14 @@ export type RootStackParamList = {
 };
 
 export type ConsolesStackParamList = {
-  ConsolesList: { autoOpenAdd?: boolean };
+  ConsolesList: { autoOpenAdd?: boolean; editingConsole?: Console };
   ConsoleDetails: {
     console: Console;
   };
 };
 
 export type GamesStackParamList = {
-  GamesList: { autoOpenAdd?: boolean };
+  GamesList: { autoOpenAdd?: boolean; editingGame?: Game };
   GameDetails: {
     game: Game;
   };

@@ -6,6 +6,7 @@ import { getConsoles, getGames, getAccessories, getWishlistItems, clearMemoryCac
 import { StorageData } from '../types';
 import { STORAGE_KEYS } from '../constants/storage';
 import { rescheduleAllNotifications } from './notifications';
+import { appLog } from '../config/environment';
 
 // Implementação simplificada do EventEmitter
 class EventEmitter {
@@ -49,10 +50,10 @@ const imageToBase64 = async (uri: string): Promise<string | undefined> => {
       try {
         // Para URLs remotas, vamos pular a conversão para base64
         // e retornar undefined para evitar erros
-        console.log('Pulando conversão de URL remota:', uri);
+        appLog.debug('Pulando conversão de URL remota:', uri);
         return undefined;
       } catch (error) {
-        console.error('Erro ao baixar imagem remota:', error);
+        appLog.error('Erro ao baixar imagem remota:', error);
         return undefined;
       }
     }
@@ -63,7 +64,7 @@ const imageToBase64 = async (uri: string): Promise<string | undefined> => {
     });
     return base64;
   } catch (error) {
-    console.error('Erro ao converter imagem para base64:', error);
+    appLog.error('Erro ao converter imagem para base64:', error);
     return undefined;
   }
 };
@@ -81,7 +82,7 @@ const base64ToImage = async (base64: string, itemId: string = 'default'): Promis
     });
     return fileName;
   } catch (error) {
-    console.error('Erro ao converter base64 para imagem:', error);
+    appLog.error('Erro ao converter base64 para imagem:', error);
     throw error;
   }
 };
@@ -103,7 +104,7 @@ const processItemsWithImages = async (items: any[]): Promise<any[]> => {
           continue;
         }
       } catch (error) {
-        console.error(`Erro ao processar imagem para o item ${item.id}:`, error);
+        appLog.error(`Erro ao processar imagem para o item ${item.id}:`, error);
       }
     }
     // Se não tiver imagem ou ocorrer erro, adiciona o item sem modificações
@@ -118,17 +119,17 @@ const restoreItemsWithImages = async (items: any[]): Promise<any[]> => {
   // Primeiro, limpar qualquer imagem antiga que possa estar no diretório
   try {
     if (!FileSystem.documentDirectory) {
-      console.error('Diretório de documentos não disponível');
+      appLog.error('Diretório de documentos não disponível');
     } else {
       const files = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
       const imageFiles = files.filter(file => file.endsWith('.jpg'));
 
-      console.log(`Encontradas ${imageFiles.length} imagens antigas para limpar`);
+      appLog.debug(`Encontradas ${imageFiles.length} imagens antigas para limpar`);
 
       // Não vamos excluir as imagens antigas ainda, apenas registrar que existem
     }
   } catch (error) {
-    console.error('Erro ao listar diretório de imagens:', error);
+    appLog.error('Erro ao listar diretório de imagens:', error);
   }
 
   const restoredItems = [];
@@ -139,7 +140,7 @@ const restoreItemsWithImages = async (items: any[]): Promise<any[]> => {
       try {
         // Passar o ID do item para garantir nomes de arquivo únicos
         const imageUrl = await base64ToImage(item.imageBase64, item.id);
-        console.log(`Imagem restaurada para o item ${item.id}: ${imageUrl}`);
+        appLog.debug(`Imagem restaurada para o item ${item.id}: ${imageUrl}`);
         restoredItems.push({
           ...item,
           imageUrl,
@@ -147,7 +148,7 @@ const restoreItemsWithImages = async (items: any[]): Promise<any[]> => {
         });
         continue;
       } catch (error) {
-        console.error(`Erro ao restaurar imagem para o item ${item.id}:`, error);
+        appLog.error(`Erro ao restaurar imagem para o item ${item.id}:`, error);
       }
     }
     // Se não tiver imagem em base64 ou ocorrer erro, adiciona o item sem imagem
@@ -173,7 +174,7 @@ export const createBackup = async () => {
       AsyncStorage.getItem(STORAGE_KEYS.THEME_MODE),
     ]);
 
-    console.log('Dados coletados para backup:', {
+    appLog.info('Dados coletados para backup:', {
       consoles: consoles.length,
       games: games.length,
       accessories: accessories.length,
@@ -218,7 +219,7 @@ export const createBackup = async () => {
     }
     const fileUri = `${FileSystem.documentDirectory}${fileName}`;
     await FileSystem.writeAsStringAsync(fileUri, backupJson);
-    console.log('Arquivo de backup criado:', fileUri);
+    appLog.info('Arquivo de backup criado:', fileUri);
 
     // Compartilha o arquivo
     await Sharing.shareAsync(fileUri, {
@@ -229,7 +230,7 @@ export const createBackup = async () => {
 
     return true;
   } catch (error) {
-    console.error('Erro ao criar backup:', error);
+    appLog.error('Erro ao criar backup:', error);
     throw new Error('Não foi possível criar o backup');
   }
 };
@@ -250,13 +251,13 @@ export const restoreBackup = async () => {
       throw new Error('Arquivo de backup inválido ou não selecionado');
     }
 
-    console.log('Arquivo de backup selecionado:', result.assets[0].uri);
+    appLog.info('Arquivo de backup selecionado:', result.assets[0].uri);
 
     // Lê o conteúdo do arquivo
     const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
     const backupData = JSON.parse(fileContent);
 
-    console.log('Dados do backup:', {
+    appLog.info('Dados do backup:', {
       consoles: backupData.consoles?.length || 0,
       games: backupData.games?.length || 0,
       accessories: backupData.accessories?.length || 0,
@@ -309,7 +310,7 @@ export const restoreBackup = async () => {
     const restoredData = await AsyncStorage.getItem(STORAGE_KEY);
     const parsedData = JSON.parse(restoredData || '{"consoles":[],"games":[],"accessories":[],"wishlist":[]}');
 
-    console.log('Dados restaurados:', {
+    appLog.info('Dados restaurados:', {
       consoles: parsedData.consoles.length,
       games: parsedData.games.length,
       accessories: parsedData.accessories.length,
@@ -326,16 +327,16 @@ export const restoreBackup = async () => {
 
     // Emite o evento de restauração completa
     backupEventEmitter.emit(BACKUP_EVENTS.RESTORE_COMPLETED);
-    console.log('Evento de restauração emitido');
+    appLog.info('Evento de restauração emitido');
 
     // Re-agenda todas as notificações após a restauração
-    console.log('Iniciando reagendamento de notificações...');
+    appLog.info('Iniciando reagendamento de notificações...');
     await rescheduleAllNotifications(restoredConsoles, restoredAccessories);
-    console.log('Notificações reagendadas com sucesso');
+    appLog.info('Notificações reagendadas com sucesso');
 
     return true;
   } catch (error: any) {
-    console.error('Erro ao restaurar backup:', error);
+    appLog.error('Erro ao restaurar backup:', error);
     throw new Error(`Não foi possível restaurar o backup: ${error.message}`);
   }
 }; 

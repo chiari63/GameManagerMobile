@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Game, Console, Accessory, WishlistItem, StorageData } from '../types';
 import { calculateNextMaintenanceDate, scheduleMaintenanceNotification } from './notifications';
+import { appLog } from '../config/environment';
 
 // Função para gerar ID único
 const generateId = () => {
@@ -27,7 +28,7 @@ export const initializeStorage = async (): Promise<void> => {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(emptyData));
     }
   } catch (error) {
-    console.error('Erro ao inicializar armazenamento:', error);
+    appLog.error('Erro ao inicializar armazenamento:', error);
   }
 };
 
@@ -46,21 +47,21 @@ export const getStorageData = async (): Promise<StorageData> => {
     return memoryCache;
   }
 
-  console.log('[Storage] Cache vazio, lendo do disco...');
+  appLog.debug('[Storage] Cache vazio, lendo do disco...');
   try {
     const data = await AsyncStorage.getItem(STORAGE_KEY);
     if (!data) {
-      console.log('[Storage] Nenhum dado encontrado, inicializando armazenamento');
+      appLog.debug('[Storage] Nenhum dado encontrado, inicializando armazenamento');
       await initializeStorage();
       memoryCache = { games: [], consoles: [], accessories: [], wishlist: [] };
       return memoryCache;
     }
 
     memoryCache = JSON.parse(data);
-    console.log('[Storage] Dados carregados para o cache');
+    appLog.debug('[Storage] Dados carregados para o cache');
     return memoryCache!;
   } catch (error) {
-    console.error('[Storage] Erro crítico ao obter dados:', error);
+    appLog.error('[Storage] Erro crítico ao obter dados:', error);
     throw new Error('Falha ao acessar o armazenamento local');
   }
 };
@@ -74,9 +75,9 @@ export const saveStorageData = async (data: StorageData): Promise<void> => {
   // Nota: Em uma aplicação maior, poderíamos usar debounce aqui
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    console.log('[Storage] Dados persistidos com sucesso');
+    appLog.debug('[Storage] Dados persistidos com sucesso');
   } catch (error) {
-    console.error('[Storage] Erro crítico ao salvar dados:', error);
+    appLog.error('[Storage] Erro crítico ao salvar dados:', error);
     throw new Error('Falha ao salvar no armazenamento local');
   }
 };
@@ -351,9 +352,9 @@ export const clearAllData = async (): Promise<void> => {
 
     // Persistir dados vazios no disco
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(emptyData));
-    console.log('[Storage] Coleção limpa com sucesso');
+    appLog.debug('[Storage] Coleção limpa com sucesso');
   } catch (error) {
-    console.error('[Storage] Erro ao limpar todos os dados:', error);
+    appLog.error('[Storage] Erro ao limpar todos os dados:', error);
     throw new Error('Falha ao limpar a coleção');
   }
 }; 

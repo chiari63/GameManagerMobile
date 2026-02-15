@@ -7,8 +7,7 @@ import { MaintenanceItem } from '../types';
 import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { Wrench, Calendar, ChevronLeft, AlertTriangle, CheckCircle, Clock, RefreshCw } from 'lucide-react-native';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { formatDate, formatLongDate } from '../utils/formatters';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAlert } from '../contexts/AlertContext';
 import { appLog } from '../config/environment';
@@ -110,11 +109,9 @@ const MaintenanceScreen = () => {
     try {
       appLog.debug(`Marking item as completed: ID=${item.id}, Type=${item.type}, Name=${item.name}`);
 
-      // Formatar a data atual no padrão brasileiro (DD/MM/YYYY)
-      const today = new Date();
-      const formattedDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
-
-      appLog.debug(`Formatted date (Brazilian format): ${formattedDate}`);
+      // Usar a data atual formatada (DD/MM/YYYY)
+      const todayString = new Date().toLocaleDateString('pt-BR');
+      appLog.debug(`Formatted date (Brazilian format): ${todayString}`);
 
       // Verificar se o item existe antes de tentar atualizá-lo
       if (item.type === 'console') {
@@ -136,7 +133,7 @@ const MaintenanceScreen = () => {
 
         appLog.debug(`Updating console: ID=${item.id}`);
         await updateConsole(item.id, {
-          lastMaintenanceDate: formattedDate
+          lastMaintenanceDate: todayString
         });
         appLog.debug(`Console updated successfully: ID=${item.id}`);
       } else {
@@ -158,7 +155,7 @@ const MaintenanceScreen = () => {
 
         appLog.debug(`Updating accessory: ID=${item.id}`);
         await updateAccessory(item.id, {
-          lastMaintenanceDate: formattedDate
+          lastMaintenanceDate: todayString
         });
         appLog.debug(`Accessory updated successfully: ID=${item.id}`);
       }
@@ -183,23 +180,6 @@ const MaintenanceScreen = () => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      // Se a data já estiver no formato DD/MM/YYYY, converter para formato mais amigável
-      if (dateString.includes('/') && dateString.split('/').length === 3) {
-        const [day, month, year] = dateString.split('/');
-        const date = new Date(Number(year), Number(month) - 1, Number(day));
-        return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-      }
-
-      // Caso contrário, converter para o formato brasileiro
-      const date = new Date(dateString);
-      return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-    } catch (error) {
-      appLog.error('Error formatting date:', error);
-      return dateString;
-    }
-  };
 
   const getUrgencyColor = (daysRemaining: number) => {
     if (daysRemaining < 0) {

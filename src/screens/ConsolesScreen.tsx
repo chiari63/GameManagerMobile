@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
 import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
 import { getConsoles, addConsole, updateConsole, deleteConsole } from '../services/storage';
 import { Console } from '../types';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell, Search } from 'lucide-react-native';
+import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell, Search, TrendingUp, Gamepad2, Info, ShoppingBag, Tag, ShieldCheck, FileText, Layout } from 'lucide-react-native';
+import { View as RNView, ImageBackground } from 'react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import { ItemCard } from '../components/ItemCard';
@@ -15,18 +16,36 @@ import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
-import IGDBConsoleSearchModal from '../components/IGDBConsoleSearchModal';
+import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import { ConsolesStackParamList, MainTabParamList } from '../navigation/types';
 import type { RouteProp } from '@react-navigation/native';
+import { isValidDate, formatCurrency } from '../utils/formatters';
 
-// Lista de fabricantes disponíveis
-const FABRICANTES = ['Sony', 'Microsoft', 'Nintendo', 'Sega', 'Tectoy', 'Atari', 'Outros'];
+// Lista de fabricantes expandida
+const FABRICANTES = [
+  'Sony', 'Microsoft', 'Nintendo', 'Sega', 'NEC', 'SNK', 'Atari',
+  'Panasonic', '3DO', 'Philips', 'Apple', 'Bandai', 'Commodore',
+  'Fujitsu', 'Magnavox', 'Mattel', 'Sinclair', 'Tectoy', 'Zeebo', 'Outros'
+];
 
-// Lista de modelos disponíveis
-const MODELOS = ['Fat', 'Slim', 'Super Slim', 'Pró', 'Meio de geração'];
+// Mapeamento de modelos por fabricante
+const MODELOS_POR_FABRICANTE: Record<string, string[]> = {
+  'Sony': ['PlayStation', 'PlayStation One', 'PS2', 'PS2 Slim', 'PS3', 'PS3 Slim', 'PS3 Super Slim', 'PS4', 'PS4 Slim', 'PS4 Pro', 'PS5', 'PS5 Digital', 'PS5 Slim', 'PSP', 'PS Vita'],
+  'Nintendo': ['NES', 'SNES', 'N64', 'GameCube', 'Wii', 'Wii U', 'Switch', 'Switch Lite', 'Switch OLED', 'Game Boy', 'Game Boy Color', 'GBA', 'GBA SP', 'DS', 'DS Lite', 'DSI', '3DS', '3DS XL', '2DS', 'New 3DS'],
+  'Microsoft': ['Xbox', 'Xbox 360', 'Xbox 360 S', 'Xbox 360 E', 'Xbox One', 'Xbox One S', 'Xbox One X', 'Xbox Series S', 'Xbox Series X'],
+  'Sega': ['Master System', 'Master System II', 'Master System III', 'Mega Drive', 'Mega Drive II', 'Mega Drive III', 'Sega CD', '32X', 'Saturn', 'Dreamcast', 'Game Gear'],
+  'NEC': ['TurboGrafx-16', 'PC Engine', 'PC Engine Duo', 'TurboExpress'],
+  'SNK': ['Neo Geo AES', 'Neo Geo CD', 'Neo Geo MVS', 'Neo Geo Pocket'],
+  'Atari': ['2600', '5200', '7800', 'Jaguar', 'Lynx'],
+  'Tectoy': ['Master System Evolution', 'Mega Drive 2017', 'Zeebo'],
+  'Outros': ['Console Genérico', 'Retrobox', 'Emulador Hardware'],
+};
 
 // Lista de regiões disponíveis
-const REGIOES = ['Americano', 'Japonês', 'Brasileiro'];
+const REGIOES = ['Americano (NTSC-U)', 'Japonês (NTSC-J)', 'Brasileiro (PAL-M)', 'Europeu (PAL)', 'Livre (Region Free)'];
+
+// Condições para colecionadores
+const CONDICOES = ['Novo', 'Lacrado', 'Completo (CIB)', 'Bom estado', 'Loose (Apenas Console)', 'Para restauração', 'Com caixa (S/ Manual)'];
 
 type ConsolesScreenProps = {
   navigation: BottomTabNavigationProp<MainTabParamList>;
@@ -36,8 +55,9 @@ type ConsolesScreenProps = {
 const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
   const theme = useTheme();
   const { showAlert } = useAlert();
+  const { showValues } = useValuesVisibility();
   const [consoles, setConsoles] = useState<Console[]>([]);
-  const [filteredConsoles, setFilteredConsoles] = useState<Console[]>([]);
+  // filteredConsoles agora será derivado via useMemo
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
@@ -53,7 +73,6 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
     region: '',
   });
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
-  const [igdbSearchModalVisible, setIgdbSearchModalVisible] = useState(false);
   const [conditionMenuVisible, setConditionMenuVisible] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -69,19 +88,14 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
     imageUrl: '',
     condition: '',
     pricePaid: '',
+    description: '',
   });
 
-  // Função para validar formato de data (DD/MM/YYYY)
-  const isValidDate = (dateString: string) => {
-    const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
-    return dateRegex.test(dateString);
-  };
 
   const loadConsoles = async () => {
     try {
       const data = await getConsoles();
       setConsoles(data);
-      setFilteredConsoles(data);
       setLoading(false);
     } catch (error) {
       console.error('Erro ao carregar consoles:', error);
@@ -106,30 +120,36 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
         // Limpar o parâmetro para não abrir novamente ao voltar
         navigation.setParams({ autoOpenAdd: undefined } as any);
       }
-    }, [route.params?.autoOpenAdd])
+      if (route.params?.editingConsole) {
+        handleEditConsole(route.params.editingConsole);
+        // Limpar o parâmetro
+        navigation.setParams({ editingConsole: undefined } as any);
+      }
+    }, [route.params?.autoOpenAdd, route.params?.editingConsole])
   );
 
+  // Otimização: Usar useMemo para filtrar consoles apenas quando necessário
+  const filteredConsoles = useMemo(() => {
+    const filtered = consoles.filter(consoleItem => {
+      const matchesSearch = !searchQuery ||
+        consoleItem.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        consoleItem.brand.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesBrand = !filters.brand || consoleItem.brand === filters.brand;
+      const matchesModel = !filters.model || consoleItem.model === filters.model;
+      const matchesRegion = !filters.region || consoleItem.region === filters.region;
+
+      return matchesSearch && matchesBrand && matchesModel && matchesRegion;
+    });
+
+    return filtered;
+  }, [searchQuery, consoles, filters]);
+
+  // Atualizar contador de filtros ativos
   useEffect(() => {
-    if (searchQuery || filters.brand || filters.model || filters.region) {
-      const filtered = consoles.filter(consoleItem => {
-        const matchesSearch = consoleItem.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          consoleItem.brand.toLowerCase().includes(searchQuery.toLowerCase());
-
-        const matchesBrand = !filters.brand || consoleItem.brand === filters.brand;
-        const matchesModel = !filters.model || consoleItem.model === filters.model;
-        const matchesRegion = !filters.region || consoleItem.region === filters.region;
-
-        return matchesSearch && matchesBrand && matchesModel && matchesRegion;
-      });
-      setFilteredConsoles(filtered);
-    } else {
-      setFilteredConsoles(consoles);
-    }
-
-    // Atualiza contador de filtros ativos
     const activeFilters = Object.values(filters).filter(value => value !== '').length;
     setActiveFiltersCount(activeFilters);
-  }, [searchQuery, consoles, filters]);
+  }, [filters]);
 
   // Adiciona listener para o evento de restauração
   useEffect(() => {
@@ -227,6 +247,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
       imageUrl: console.imageUrl || '',
       condition: console.condition || '',
       pricePaid: console.pricePaid ? console.pricePaid.toString() : '',
+      description: console.description || '',
     });
     setModalVisible(true);
     setMenuVisible(null);
@@ -277,6 +298,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
       imageUrl: '',
       condition: '',
       pricePaid: '',
+      description: '',
     });
   };
 
@@ -394,16 +416,19 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
                 }}
                 title="Todos os modelos"
               />
-              {MODELOS.map((modelo) => (
-                <Menu.Item
-                  key={modelo}
-                  onPress={() => {
-                    setFilters(prev => ({ ...prev, model: modelo }));
-                    setModeloMenuVisible(false);
-                  }}
-                  title={modelo}
-                />
-              ))}
+              {/* Mostrar modelos baseados na marca selecionada no filtro */}
+              {(filters.brand && MODELOS_POR_FABRICANTE[filters.brand] ?
+                MODELOS_POR_FABRICANTE[filters.brand] :
+                Object.values(MODELOS_POR_FABRICANTE).flat().slice(0, 10)).map((modelo) => (
+                  <Menu.Item
+                    key={modelo}
+                    onPress={() => {
+                      setFilters(prev => ({ ...prev, model: modelo }));
+                      setModeloMenuVisible(false);
+                    }}
+                    title={modelo}
+                  />
+                ))}
             </Menu>
           </View>
 
@@ -462,71 +487,57 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
       layout="grid"
       title={item.name}
       subtitle={item.brand}
+      subtitleStyle={{ color: appColors.console }}
       imageUri={item.imageUrl}
-      placeholderIcon={<Gamepad size={32} color={appColors.primary} />}
+      placeholderIcon={<Gamepad2 size={40} color={appColors.console} />}
       onPress={() => handleViewDetails(item)}
       onLongPress={() => {
         setEditingConsole(item);
         setMenuVisible(item.id);
       }}
       rightElement={
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{
-            backgroundColor: theme.colors.surfaceVariant,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            borderRadius: 8,
-            marginRight: 8,
-          }}>
-            <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12 }}>
-              {item.model}
-            </Text>
-          </View>
-          <Menu
-            visible={menuVisible === item.id}
-            onDismiss={() => setMenuVisible(null)}
-            anchor={
-              <TouchableOpacity
-                onPress={() => setMenuVisible(item.id)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />
-              </TouchableOpacity>
-            }
-          >
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(null);
-                handleEditConsole(item);
-              }}
-              title="Editar"
-              leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
-            />
-            <Menu.Item
-              onPress={() => {
-                setMenuVisible(null);
-                confirmDelete(item.id);
-              }}
-              title="Excluir"
-              leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
-              titleStyle={{ color: appColors.destructive }}
-            />
-          </Menu>
+        <Menu
+          visible={menuVisible === item.id}
+          onDismiss={() => setMenuVisible(null)}
+          anchor={
+            <TouchableOpacity
+              onPress={() => setMenuVisible(item.id)}
+              style={styles.menuIconButton}
+            >
+              <MoreVertical color={theme.colors.onSurfaceVariant} size={18} />
+            </TouchableOpacity>
+          }
+        >
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(null);
+              handleEditConsole(item);
+            }}
+            title="Editar"
+            leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
+          />
+          <Menu.Item
+            onPress={() => {
+              setMenuVisible(null);
+              confirmDelete(item.id);
+            }}
+            title="Excluir"
+            leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
+            titleStyle={{ color: appColors.destructive }}
+          />
+        </Menu>
+      }
+      badge={
+        <View style={styles.typeBadge}>
+          <Text style={styles.typeBadgeText}>{item.model}</Text>
         </View>
       }
       footer={
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Calendar size={14} color={theme.colors.onSurfaceVariant} />
-            <Text style={{ color: theme.colors.onSurfaceVariant, fontSize: 12, marginLeft: 4 }}>
-              {item.purchaseDate}
-            </Text>
-          </View>
-          {item.pricePaid && (
-            <Text style={{ color: appColors.accent, fontWeight: 'bold' }}>
-              R$ {item.pricePaid.toFixed(2)}
-            </Text>
-          )}
+        <View style={styles.priceRow}>
+          <TrendingUp size={14} color="#25d07c" />
+          <Text style={styles.priceText}>
+            {showValues ? formatCurrency(item.pricePaid) : 'R$ ••••••'}
+          </Text>
         </View>
       }
     />
@@ -549,7 +560,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
     navigation.setOptions({
       headerLeft: () => (
         <TouchableOpacity
-          onPress={() => navigation.navigate('Home')}
+          onPress={() => navigation.navigate('HomeStack')}
           style={{ marginLeft: 8 }}
         >
           <ChevronLeft color={theme.colors.onSurface} size={24} />
@@ -558,62 +569,108 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
     });
   }, [navigation, theme]);
 
-  // Função para lidar com a seleção de um console da API IGDB
-  const handleIGDBConsoleSelect = (platformData: any) => {
-    setFormData({
-      ...formData,
-      name: platformData.name || formData.name,
-      brand: platformData.brand || formData.brand,
-      imageUrl: platformData.imageUrl || formData.imageUrl,
-    });
+
+  const renderHeader = () => {
+    const totalInvested = consoles.reduce((sum, item) => sum + (item.pricePaid || 0), 0);
+
+    return (
+      <View>
+        <ImageBackground
+          source={require('../../assets/Consoles.jpg')}
+          style={styles.heroBackground}
+          imageStyle={styles.heroImage}
+        >
+          <View style={styles.heroOverlay}>
+            <View style={styles.headerTop}>
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={styles.backButton}
+              >
+                <ChevronLeft color="#ffffff" size={28} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.heroContent}>
+              <View>
+                <Text style={styles.heroTitle}>Consoles</Text>
+                <Text style={styles.heroSubtitle}>Coleção de Hardware</Text>
+              </View>
+              <View style={[styles.statsBadge, { backgroundColor: appColors.console }]}>
+                <View style={styles.statsIconCircle}>
+                  <Gamepad2 size={16} color="#fff" />
+                </View>
+                <Text style={styles.statsBadgeText}>CONSOLES</Text>
+              </View>
+            </View>
+          </View>
+        </ImageBackground>
+
+        {/* Summary Card */}
+        <View style={styles.summaryCardContainer}>
+          <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Total Investido</Text>
+              <Text style={[styles.summaryValue, { color: '#25d07c' }]}>
+                {showValues ? formatCurrency(totalInvested) : 'R$ ••••••'}
+              </Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Qtd. Consoles</Text>
+              <Text style={styles.summaryValue}>{consoles.length}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Search and Filters */}
+        <View style={styles.headerControls}>
+          <View style={styles.searchRow}>
+            <View style={styles.searchContainer}>
+              <Searchbar
+                placeholder="Buscar consoles..."
+                onChangeText={setSearchQuery}
+                value={searchQuery}
+                style={commonStyles.searchbar}
+                iconColor={theme.colors.onSurfaceVariant}
+                inputStyle={{ color: theme.colors.onSurface }}
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+              />
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                activeFiltersCount > 0 && styles.filterButtonActive
+              ]}
+              onPress={() => setFilterModalVisible(true)}
+            >
+              <SlidersHorizontal
+                color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant}
+                size={20}
+              />
+              {activeFiltersCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
   };
 
   return (
     <View style={[commonStyles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={commonStyles.header}>
-        <View style={styles.searchRow}>
-          <View style={styles.searchContainer}>
-            <Searchbar
-              placeholder="Buscar consoles..."
-              onChangeText={setSearchQuery}
-              value={searchQuery}
-              style={commonStyles.searchbar}
-              iconColor={theme.colors.onSurfaceVariant}
-              inputStyle={{ color: theme.colors.onSurface }}
-              placeholderTextColor={theme.colors.onSurfaceVariant}
-            />
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              activeFiltersCount > 0 && styles.filterButtonActive
-            ]}
-            onPress={() => setFilterModalVisible(true)}
-          >
-            <SlidersHorizontal
-              color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant}
-              size={20}
-            />
-            {activeFiltersCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
 
       <FlatList
         data={filteredConsoles}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          styles.listContentContainer,
-          filteredConsoles.length === 0 && { flex: 1 }
-        ]}
+        contentContainerStyle={styles.listContentContainer}
+        ListHeaderComponent={renderHeader}
         ListEmptyComponent={EmptyState}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
+        showsVerticalScrollIndicator={false}
       />
 
       <FAB
@@ -635,339 +692,375 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
               {editingConsole ? 'Editar Console' : 'Novo Console'}
             </Text>
 
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Nome do Console</Text>
-              <TextInput
-                value={formData.name}
-                onChangeText={(text) => setFormData({ ...formData, name: text })}
-                style={commonStyles.input}
-                mode="flat"
-                placeholder="Digite o nome do console"
-                placeholderTextColor={theme.colors.onSurfaceVariant}
-              />
-            </View>
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <Layout size={20} color={appColors.console} />
+                <Text style={styles.sectionTitle}>Identificação</Text>
+              </View>
 
-            <View style={commonStyles.formGroup}>
-              <Button
-                mode="outlined"
-                icon={() => <Search size={18} color={appColors.primary} />}
-                onPress={() => setIgdbSearchModalVisible(true)}
-                style={[styles.igdbButton, { borderColor: appColors.primary, borderWidth: 1.5 }]}
-                labelStyle={{ color: appColors.primary, fontWeight: 'bold' }}
-              >
-                Buscar console na IGDB
-              </Button>
-              <Text style={styles.igdbHelpText}>
-                Preencha automaticamente os dados do console buscando na base IGDB
-              </Text>
-            </View>
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Nome do Console</Text>
+                <TextInput
+                  value={formData.name}
+                  onChangeText={(text) => setFormData({ ...formData, name: text })}
+                  style={commonStyles.input}
+                  mode="flat"
+                  placeholder="Ex: PlayStation 5"
+                  placeholderTextColor={theme.colors.onSurfaceVariant}
+                />
+              </View>
 
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Fabricante</Text>
-              <Menu
-                visible={fabricanteMenuVisible}
-                onDismiss={() => setFabricanteMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    onPress={() => setFabricanteMenuVisible(true)}
-                    style={[commonStyles.input, styles.menuButton]}
-                  >
-                    <Text style={{ color: theme.colors.onSurface }}>
-                      {formData.brand || 'Selecione o fabricante'}
-                    </Text>
-                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                  </TouchableOpacity>
-                }
-              >
-                {FABRICANTES.map((fabricante) => (
-                  <Menu.Item
-                    key={fabricante}
-                    onPress={() => {
-                      setFormData({ ...formData, brand: fabricante });
-                      setFabricanteMenuVisible(false);
-                    }}
-                    title={fabricante}
-                  />
-                ))}
-              </Menu>
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Modelo</Text>
-              <Menu
-                visible={modeloMenuVisible}
-                onDismiss={() => setModeloMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    onPress={() => setModeloMenuVisible(true)}
-                    style={[commonStyles.input, styles.menuButton]}
-                  >
-                    <Text style={{ color: theme.colors.onSurface }}>
-                      {formData.model || 'Selecione o modelo'}
-                    </Text>
-                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                  </TouchableOpacity>
-                }
-              >
-                {MODELOS.map((modelo) => (
-                  <Menu.Item
-                    key={modelo}
-                    onPress={() => {
-                      setFormData({ ...formData, model: modelo });
-                      setModeloMenuVisible(false);
-                    }}
-                    title={modelo}
-                  />
-                ))}
-              </Menu>
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Região</Text>
-              <Menu
-                visible={regiaoMenuVisible}
-                onDismiss={() => setRegiaoMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    onPress={() => setRegiaoMenuVisible(true)}
-                    style={[commonStyles.input, styles.menuButton]}
-                  >
-                    <Text style={{ color: theme.colors.onSurface }}>
-                      {formData.region || 'Selecione a região'}
-                    </Text>
-                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                  </TouchableOpacity>
-                }
-              >
-                {REGIOES.map((regiao) => (
-                  <Menu.Item
-                    key={regiao}
-                    onPress={() => {
-                      setFormData({ ...formData, region: regiao });
-                      setRegiaoMenuVisible(false);
-                    }}
-                    title={regiao}
-                  />
-                ))}
-              </Menu>
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Condição</Text>
-              <Menu
-                visible={conditionMenuVisible}
-                onDismiss={() => setConditionMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    onPress={() => setConditionMenuVisible(true)}
-                    style={[commonStyles.input, styles.menuButton]}
-                  >
-                    <Text style={{ color: theme.colors.onSurface }}>
-                      {formData.condition || 'Selecione a condição'}
-                    </Text>
-                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                  </TouchableOpacity>
-                }
-              >
-                {['Novo', 'Como novo', 'Bom estado', 'Regular', 'Precisa de reparos'].map((condition) => (
-                  <Menu.Item
-                    key={condition}
-                    onPress={() => {
-                      setFormData({ ...formData, condition });
-                      setConditionMenuVisible(false);
-                    }}
-                    title={condition}
-                  />
-                ))}
-              </Menu>
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Preço Pago (R$)</Text>
-              <TextInput
-                value={formData.pricePaid}
-                onChangeText={(text) => {
-                  // Permitir apenas números e ponto decimal
-                  const cleanedText = text.replace(/[^0-9.]/g, '');
-                  setFormData({ ...formData, pricePaid: cleanedText });
-                }}
-                style={commonStyles.input}
-                mode="flat"
-                placeholder="0.00"
-                placeholderTextColor={theme.colors.onSurfaceVariant}
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <DatePicker
-                label="Data de Compra"
-                value={formData.purchaseDate}
-                onChange={(date) => setFormData({ ...formData, purchaseDate: date })}
-                style={commonStyles.formGroup}
-              />
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <DatePicker
-                label="Data da Última Manutenção"
-                value={formData.lastMaintenanceDate}
-                onChange={(date) => setFormData({ ...formData, lastMaintenanceDate: date })}
-                style={commonStyles.formGroup}
-              />
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Intervalo de Manutenção (meses)</Text>
-              <View style={styles.intervalContainer}>
-                {[3, 6, 12, 24].map((months) => (
-                  <TouchableOpacity
-                    key={months}
-                    style={[
-                      styles.intervalButton,
-                      formData.maintenanceInterval === months && styles.intervalButtonActive
-                    ]}
-                    onPress={() => setFormData({ ...formData, maintenanceInterval: months })}
-                  >
-                    <Text
-                      style={[
-                        styles.intervalButtonText,
-                        formData.maintenanceInterval === months && styles.intervalButtonTextActive
-                      ]}
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Fabricante</Text>
+                <Menu
+                  visible={fabricanteMenuVisible}
+                  onDismiss={() => setFabricanteMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      onPress={() => setFabricanteMenuVisible(true)}
+                      style={[commonStyles.input, styles.menuButton]}
                     >
-                      {months}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={[commonStyles.formGroup, styles.switchContainer]}>
-              <View style={styles.switchLabelContainer}>
-                <Bell size={18} color={theme.colors.onSurfaceVariant} />
-                <Text style={[commonStyles.label, styles.switchLabel]}>
-                  Notificar sobre manutenção
-                </Text>
-              </View>
-              <Switch
-                value={formData.notifyMaintenance}
-                onValueChange={async (value) => {
-                  setFormData({ ...formData, notifyMaintenance: value });
-                  if (value) {
-                    const permissionGranted = await requestNotificationPermissions();
-                    if (!permissionGranted) {
-                      showAlert({
-                        title: 'Permissão de Notificação',
-                        message: 'Para receber lembretes de manutenção, é necessário permitir notificações nas configurações do aplicativo.',
-                        buttons: [{ text: 'OK', onPress: () => { } }]
-                      });
-                    }
+                      <Text style={{ color: theme.colors.onSurface }}>
+                        {formData.brand || 'Selecione o fabricante'}
+                      </Text>
+                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                    </TouchableOpacity>
                   }
-                }}
-                color={appColors.primary}
-              />
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Descrição da Manutenção</Text>
-              <TextInput
-                value={formData.maintenanceDescription}
-                onChangeText={(text) => setFormData({ ...formData, maintenanceDescription: text })}
-                style={commonStyles.input}
-                mode="flat"
-                multiline
-                numberOfLines={3}
-                placeholder="Descreva a última manutenção realizada"
-                placeholderTextColor={theme.colors.onSurfaceVariant}
-              />
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <View style={styles.labelContainer}>
-                <ImageIcon size={18} color={theme.colors.onSurfaceVariant} />
-                <Text style={[commonStyles.label, styles.labelText]}>Imagem do Console</Text>
+                >
+                  <ScrollView style={{ maxHeight: 300 }}>
+                    {FABRICANTES.map((fabricante) => (
+                      <Menu.Item
+                        key={fabricante}
+                        onPress={() => {
+                          setFormData({ ...formData, brand: fabricante, model: '' });
+                          setFabricanteMenuVisible(false);
+                        }}
+                        title={fabricante}
+                      />
+                    ))}
+                  </ScrollView>
+                </Menu>
               </View>
-              {formData.imageUrl ? (
-                <View style={styles.imagePreviewContainer}>
-                  <Image
-                    source={{ uri: formData.imageUrl }}
-                    style={styles.imagePreview}
-                    resizeMode="cover"
-                  />
-                  <TouchableOpacity
-                    style={styles.removeImageButton}
-                    onPress={() => setFormData({ ...formData, imageUrl: '' })}
-                  >
-                    <X color="#fff" size={20} />
-                  </TouchableOpacity>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Modelo</Text>
+                <Menu
+                  visible={modeloMenuVisible}
+                  onDismiss={() => setModeloMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      onPress={() => setModeloMenuVisible(true)}
+                      style={[commonStyles.input, styles.menuButton]}
+                    >
+                      <Text style={{ color: theme.colors.onSurface }}>
+                        {formData.model || 'Selecione o modelo'}
+                      </Text>
+                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                    </TouchableOpacity>
+                  }
+                >
+                  <ScrollView style={{ maxHeight: 300 }}>
+                    {(formData.brand && MODELOS_POR_FABRICANTE[formData.brand] ?
+                      MODELOS_POR_FABRICANTE[formData.brand] :
+                      ['Selecione um fabricante primeiro']).map((modelo) => (
+                        <Menu.Item
+                          key={modelo}
+                          onPress={() => {
+                            if (formData.brand) {
+                              setFormData({ ...formData, model: modelo });
+                            }
+                            setModeloMenuVisible(false);
+                          }}
+                          title={modelo}
+                          disabled={!formData.brand}
+                        />
+                      ))}
+                  </ScrollView>
+                </Menu>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Notas / História do Console</Text>
+                <TextInput
+                  value={formData.description}
+                  onChangeText={(text) => setFormData({ ...formData, description: text })}
+                  style={[commonStyles.input, { height: 100 }]}
+                  mode="flat"
+                  multiline
+                  numberOfLines={4}
+                  placeholder="Conte um pouco sobre este console ou sua história com ele..."
+                  placeholderTextColor={theme.colors.onSurfaceVariant}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <ShieldCheck size={20} color={appColors.console} />
+                <Text style={styles.sectionTitle}>Estado & Região</Text>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Condição</Text>
+                <Menu
+                  visible={conditionMenuVisible}
+                  onDismiss={() => setConditionMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      onPress={() => setConditionMenuVisible(true)}
+                      style={[commonStyles.input, styles.menuButton]}
+                    >
+                      <Text style={{ color: theme.colors.onSurface }}>
+                        {formData.condition || 'Selecione a condição'}
+                      </Text>
+                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                    </TouchableOpacity>
+                  }
+                >
+                  {CONDICOES.map((condition) => (
+                    <Menu.Item
+                      key={condition}
+                      onPress={() => {
+                        setFormData({ ...formData, condition });
+                        setConditionMenuVisible(false);
+                      }}
+                      title={condition}
+                    />
+                  ))}
+                </Menu>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Região</Text>
+                <Menu
+                  visible={regiaoMenuVisible}
+                  onDismiss={() => setRegiaoMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      onPress={() => setRegiaoMenuVisible(true)}
+                      style={[commonStyles.input, styles.menuButton]}
+                    >
+                      <Text style={{ color: theme.colors.onSurface }}>
+                        {formData.region || 'Selecione a região'}
+                      </Text>
+                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                    </TouchableOpacity>
+                  }
+                >
+                  {REGIOES.map((regiao) => (
+                    <Menu.Item
+                      key={regiao}
+                      onPress={() => {
+                        setFormData({ ...formData, region: regiao });
+                        setRegiaoMenuVisible(false);
+                      }}
+                      title={regiao}
+                    />
+                  ))}
+                </Menu>
+              </View>
+            </View>
+
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <ShoppingBag size={20} color={appColors.console} />
+                <Text style={styles.sectionTitle}>Investimento</Text>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Preço Pago (R$)</Text>
+                <TextInput
+                  value={formData.pricePaid}
+                  onChangeText={(text) => {
+                    const cleanedText = text.replace(/[^0-9.]/g, '');
+                    setFormData({ ...formData, pricePaid: cleanedText });
+                  }}
+                  style={commonStyles.input}
+                  mode="flat"
+                  placeholder="0.00"
+                  placeholderTextColor={theme.colors.onSurfaceVariant}
+                  keyboardType="numeric"
+                  left={<TextInput.Affix text="R$" />}
+                />
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <DatePicker
+                  label="Data de Compra"
+                  value={formData.purchaseDate}
+                  onChange={(date) => setFormData({ ...formData, purchaseDate: date })}
+                  style={commonStyles.formGroup}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <Settings size={20} color={appColors.console} />
+                <Text style={styles.sectionTitle}>Cuidado & Manutenção</Text>
+              </View>
+
+              <View style={[commonStyles.formGroup, styles.switchContainer]}>
+                <View style={styles.switchLabelContainer}>
+                  <Bell size={18} color={theme.colors.onSurfaceVariant} />
+                  <Text style={[commonStyles.label, styles.switchLabel]}>
+                    Notificar sobre manutenção
+                  </Text>
                 </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.imageUploader}
-                  onPress={async () => {
-                    try {
-                      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                      if (!permission.granted) {
+                <Switch
+                  value={formData.notifyMaintenance}
+                  onValueChange={async (value) => {
+                    setFormData({ ...formData, notifyMaintenance: value });
+                    if (value) {
+                      const permissionGranted = await requestNotificationPermissions();
+                      if (!permissionGranted) {
                         showAlert({
-                          title: 'Permissão necessária',
-                          message: 'Precisamos de acesso à sua galeria para selecionar uma imagem.',
+                          title: 'Permissão de Notificação',
+                          message: 'Para receber lembretes de manutenção, é necessário permitir notificações nas configurações do aplicativo.',
                           buttons: [{ text: 'OK', onPress: () => { } }]
                         });
-                        return;
                       }
-
-                      const result = await ImagePicker.launchImageLibraryAsync({
-                        mediaTypes: 'images',
-                        allowsEditing: true,
-                        aspect: [4, 3],
-                        quality: 0.8,
-                      });
-
-                      if (!result.canceled) {
-                        // Processar a imagem para garantir o formato 4:3
-                        const processedImage = await ImageManipulator.manipulateAsync(
-                          result.assets[0].uri,
-                          [{ resize: { width: 800, height: 600 } }],
-                          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-                        );
-
-                        setFormData({ ...formData, imageUrl: processedImage.uri });
-                      }
-                    } catch (error) {
-                      console.error('Erro ao selecionar imagem:', error);
-                      showAlert({
-                        title: 'Erro',
-                        message: 'Não foi possível selecionar a imagem.',
-                        buttons: [{ text: 'OK', onPress: () => { } }]
-                      });
                     }
                   }}
-                >
-                  <Upload size={32} color="#94a3b8" />
-                  <Text style={styles.imageUploaderText}>
-                    Toque para selecionar uma imagem
-                  </Text>
-                  <Text style={styles.imageUploaderSubtext}>
-                    A imagem será ajustada para o formato 4:3
-                  </Text>
-                </TouchableOpacity>
-              )}
+                  color={appColors.console}
+                />
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <DatePicker
+                  label="Data da Última Manutenção"
+                  value={formData.lastMaintenanceDate}
+                  onChange={(date) => setFormData({ ...formData, lastMaintenanceDate: date })}
+                  style={commonStyles.formGroup}
+                />
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Intervalo sugerido (meses)</Text>
+                <View style={styles.intervalContainer}>
+                  {[3, 6, 12, 24].map((months) => (
+                    <TouchableOpacity
+                      key={months}
+                      style={[
+                        styles.intervalButton,
+                        formData.maintenanceInterval === months && { borderColor: appColors.console, backgroundColor: `${appColors.console}15` }
+                      ]}
+                      onPress={() => setFormData({ ...formData, maintenanceInterval: months })}
+                    >
+                      <Text
+                        style={[
+                          styles.intervalButtonText,
+                          formData.maintenanceInterval === months && { color: appColors.console }
+                        ]}
+                      >
+                        {months}m
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <View style={styles.labelContainer}>
+                  <FileText size={16} color={theme.colors.onSurfaceVariant} />
+                  <Text style={[commonStyles.label, styles.labelText]}>Observações</Text>
+                </View>
+                <TextInput
+                  value={formData.maintenanceDescription}
+                  onChangeText={(text) => setFormData({ ...formData, maintenanceDescription: text })}
+                  style={[commonStyles.input, { height: 80 }]}
+                  mode="flat"
+                  multiline
+                  numberOfLines={3}
+                  placeholder="Ex: Trocado pasta térmica e limpeza interna"
+                  placeholderTextColor={theme.colors.onSurfaceVariant}
+                />
+              </View>
+            </View>
+
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <ImageIcon size={20} color={appColors.console} />
+                <Text style={styles.sectionTitle}>Mídia</Text>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                {formData.imageUrl ? (
+                  <View style={styles.imagePreviewContainer}>
+                    <Image
+                      source={{ uri: formData.imageUrl }}
+                      style={styles.imagePreview}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => setFormData({ ...formData, imageUrl: '' })}
+                    >
+                      <X color="#fff" size={20} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.imageUploader}
+                    onPress={async () => {
+                      try {
+                        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                        if (!permission.granted) {
+                          showAlert({
+                            title: 'Permissão necessária',
+                            message: 'Precisamos de acesso à sua galeria para selecionar uma imagem.',
+                            buttons: [{ text: 'OK', onPress: () => { } }]
+                          });
+                          return;
+                        }
+
+                        const result = await ImagePicker.launchImageLibraryAsync({
+                          mediaTypes: 'images',
+                          allowsEditing: true,
+                          aspect: [4, 3],
+                          quality: 0.8,
+                        });
+
+                        if (!result.canceled) {
+                          const processedImage = await ImageManipulator.manipulateAsync(
+                            result.assets[0].uri,
+                            [{ resize: { width: 800, height: 600 } }],
+                            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+                          );
+
+                          setFormData({ ...formData, imageUrl: processedImage.uri });
+                        }
+                      } catch (error) {
+                        console.error('Erro ao selecionar imagem:', error);
+                        showAlert({
+                          title: 'Erro',
+                          message: 'Não foi possível selecionar a imagem.',
+                          buttons: [{ text: 'OK', onPress: () => { } }]
+                        });
+                      }
+                    }}
+                  >
+                    <Upload size={32} color="#94a3b8" />
+                    <Text style={styles.imageUploaderText}>Selecionar Foto</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             <Button
               mode="contained"
               onPress={handleAddConsole}
-              style={[commonStyles.button, { backgroundColor: appColors.primary }]}
+              style={[commonStyles.button, { backgroundColor: appColors.console, marginTop: 16 }]}
               labelStyle={commonStyles.buttonText}
             >
               {editingConsole ? 'Salvar Alterações' : 'Adicionar Console'}
             </Button>
 
             <Button
-              mode="outlined"
+              mode="text"
               onPress={() => setModalVisible(false)}
-              style={[commonStyles.button, { marginTop: 12 }]}
-              labelStyle={[commonStyles.buttonText, { color: theme.colors.onSurface }]}
+              style={[{ marginTop: 8 }]}
+              labelStyle={{ color: '#94a3b8' }}
             >
               Cancelar
             </Button>
@@ -975,25 +1068,107 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
         </Modal>
       </Portal>
 
-      {/* Modal de busca na API IGDB */}
-      <IGDBConsoleSearchModal
-        visible={igdbSearchModalVisible}
-        onClose={() => setIgdbSearchModalVisible(false)}
-        onSelect={handleIGDBConsoleSelect}
-      />
-
       {renderFilterModal()}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  heroBackground: {
+    height: 200,
+    width: '100%',
+  },
+  heroImage: {
+    opacity: 0.8,
+  },
+  heroOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'flex-end',
+    padding: 24,
+    paddingBottom: 40,
+  },
+  heroContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+  statsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  statsIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statsBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  summaryCardContainer: {
+    marginTop: -30,
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    padding: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginHorizontal: 10,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  headerControls: {
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
   listContentContainer: {
-    padding: 8,
+    paddingBottom: 100,
   },
   columnWrapper: {
+    paddingHorizontal: 16,
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
   },
   menuButton: {
     flexDirection: 'row',
@@ -1095,6 +1270,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  typeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: appColors.console,
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    color: '#ffffff',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  priceText: {
+    color: '#25d07c',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  menuIconButton: {
+    padding: 4,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1215,6 +1421,42 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 4,
     marginLeft: 4,
+  },
+  formSection: {
+    marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    paddingBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: appColors.console,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  headerTop: {
+    paddingTop: 10,
+    marginBottom: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

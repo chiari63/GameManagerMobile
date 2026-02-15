@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
 import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Switch, useTheme } from 'react-native-paper';
 import { getAccessories, addAccessory, updateAccessory, deleteAccessory, getConsoles } from '../services/storage';
 import { Accessory, Console } from '../types';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal, ChevronLeft, Bell, Edit, Trash2, Search } from 'lucide-react-native';
+import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal, ChevronLeft, Bell, Edit, Trash2, Search, Info, Package, Tag, ShieldCheck, Layout, TrendingUp } from 'lucide-react-native';
+import { View as RNView, ImageBackground } from 'react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import { ItemCard } from '../components/ItemCard';
@@ -15,11 +16,21 @@ import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
+import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import type { RouteProp } from '@react-navigation/native';
 
 // Lista de tipos de acessórios disponíveis
 const TIPOS = ['Controles', 'Cabos', 'Memorycards', 'Outros'];
+
+const CONDICOES = [
+  'Novo',
+  'Como novo',
+  'Bom',
+  'Regular',
+  'Ruim',
+  'Para restauro'
+];
 
 type AccessoriesScreenProps = {
   navigation: BottomTabNavigationProp<MainTabParamList>;
@@ -29,8 +40,9 @@ type AccessoriesScreenProps = {
 const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
   const theme = useTheme();
   const { showAlert } = useAlert();
+  const { showValues } = useValuesVisibility();
   const [accessories, setAccessories] = useState<Accessory[]>([]);
-  const [filteredAccessories, setFilteredAccessories] = useState<Accessory[]>([]);
+  // filteredAccessories agora será derivado via useMemo
   const [consoles, setConsoles] = useState<Console[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -59,6 +71,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
     imageUrl: '',
     condition: '',
     pricePaid: '',
+    description: '',
   });
 
   const loadAccessories = async () => {
@@ -68,7 +81,6 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
         getConsoles()
       ]);
       setAccessories(accessoriesData);
-      setFilteredAccessories(accessoriesData);
       setConsoles(consolesData);
     } catch (error) {
       console.error('Erro ao carregar acessórios:', error);
@@ -90,33 +102,52 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
     useCallback(() => {
       if (route.params?.autoOpenAdd) {
         setModalVisible(true);
-        // Limpar o parâmetro para não abrir novamente ao voltar
         navigation.setParams({ autoOpenAdd: undefined } as any);
       }
-    }, [route.params?.autoOpenAdd])
+      const editingFromRoute = (route.params as any)?.editingAccessory as Accessory | undefined;
+      if (editingFromRoute) {
+        setEditingAccessory(editingFromRoute);
+        setFormData({
+          name: editingFromRoute.name,
+          type: editingFromRoute.type,
+          consoleId: editingFromRoute.consoleId,
+          purchaseDate: editingFromRoute.purchaseDate,
+          lastMaintenanceDate: editingFromRoute.lastMaintenanceDate || '',
+          maintenanceDescription: editingFromRoute.maintenanceDescription || '',
+          maintenanceInterval: editingFromRoute.maintenanceInterval || 6,
+          notifyMaintenance: editingFromRoute.notifyMaintenance !== undefined ? editingFromRoute.notifyMaintenance : true,
+          imageUrl: editingFromRoute.imageUrl || '',
+          condition: editingFromRoute.condition || '',
+          pricePaid: editingFromRoute.pricePaid ? editingFromRoute.pricePaid.toString() : '',
+          description: editingFromRoute.description || '',
+        });
+        setModalVisible(true);
+        navigation.setParams({ editingAccessory: undefined } as any);
+      }
+    }, [route.params])
   );
 
+  // Otimização: Usar useMemo para filtrar acessórios apenas quando necessário
+  const filteredAccessories = useMemo(() => {
+    const filtered = accessories.filter(accessory => {
+      const matchesSearch = !searchQuery ||
+        accessory.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        accessory.type.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesType = !filters.type || accessory.type === filters.type;
+      const matchesConsole = !filters.consoleId || accessory.consoleId === filters.consoleId;
+
+      return matchesSearch && matchesType && matchesConsole;
+    });
+
+    return filtered;
+  }, [searchQuery, accessories, filters]);
+
+  // Atualizar contador de filtros ativos
   useEffect(() => {
-    if (searchQuery || filters.type || filters.consoleId) {
-      const filtered = accessories.filter(accessory => {
-        const matchesSearch = accessory.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          accessory.type.toLowerCase().includes(searchQuery.toLowerCase());
-
-        const matchesType = !filters.type || accessory.type === filters.type;
-
-        const matchesConsole = !filters.consoleId || accessory.consoleId === filters.consoleId;
-
-        return matchesSearch && matchesType && matchesConsole;
-      });
-      setFilteredAccessories(filtered);
-    } else {
-      setFilteredAccessories(accessories);
-    }
-
-    // Atualiza contador de filtros ativos
     const activeFilters = Object.values(filters).filter(value => value !== '').length;
     setActiveFiltersCount(activeFilters);
-  }, [searchQuery, accessories, filters]);
+  }, [filters]);
 
   // Adiciona listener para o evento de restauração
   useEffect(() => {
@@ -131,19 +162,12 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
     };
   }, []);
 
-  // Adicionar listener para o botão de menu na barra de navegação
+  // Ocultar o cabeçalho padrão para usar o cabeçalho imersivo
   useEffect(() => {
     navigation.setOptions({
-      headerLeft: () => (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Home')}
-          style={{ marginLeft: 8 }}
-        >
-          <ChevronLeft color={theme.colors.onSurface} size={24} />
-        </TouchableOpacity>
-      ),
+      headerShown: false,
     });
-  }, [navigation, theme]);
+  }, [navigation]);
 
   const handleAddAccessory = async () => {
     if (!formData.name || !formData.type) {
@@ -168,6 +192,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
         imageUrl: formData.imageUrl,
         condition: formData.condition,
         pricePaid: formData.pricePaid ? parseFloat(formData.pricePaid) : undefined,
+        description: formData.description,
       };
 
       if (editingAccessory) {
@@ -215,6 +240,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
       imageUrl: accessory.imageUrl || '',
       condition: accessory.condition || '',
       pricePaid: accessory.pricePaid ? accessory.pricePaid.toString() : '',
+      description: accessory.description || '',
     });
     setModalVisible(true);
     setMenuVisible(null);
@@ -264,6 +290,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
       imageUrl: '',
       condition: '',
       pricePaid: '',
+      description: '',
     });
   };
 
@@ -287,6 +314,94 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
       type: '',
       consoleId: '',
     });
+  };
+
+  const renderHeader = () => {
+    const totalInvested = accessories.reduce((sum, item) => sum + (item.pricePaid || 0), 0);
+
+    return (
+      <View>
+        <ImageBackground
+          source={require('../../assets/Acessorios.jpg')}
+          style={styles.heroImage}
+          imageStyle={styles.heroImageStyle}
+        >
+          <View style={styles.heroOverlay}>
+            <View style={styles.headerTop}>
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={styles.backButton}
+              >
+                <ChevronLeft color="#ffffff" size={28} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.heroContent}>
+              <View>
+                <Text style={styles.heroTitle}>Acessórios</Text>
+                <Text style={styles.heroSubtitle}>Controles & Extras</Text>
+              </View>
+              <View style={[styles.statsBadge, { backgroundColor: '#f59e0b' }]}>
+                <View style={styles.statsIconCircle}>
+                  <Package size={16} color="#fff" />
+                </View>
+                <Text style={styles.statsBadgeText}>ACESSÓRIOS</Text>
+              </View>
+            </View>
+          </View>
+        </ImageBackground>
+
+        {/* Summary Card */}
+        <View style={styles.summaryCardContainer}>
+          <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Total Investido</Text>
+              <Text style={[styles.summaryValue, { color: '#25d07c' }]}>
+                {showValues ? `R$ ${totalInvested.toFixed(2)}` : 'R$ ••••••'}
+              </Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Qtd. Itens</Text>
+              <Text style={styles.summaryValue}>{accessories.length}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Search and Filters */}
+        <View style={styles.headerControls}>
+          <View style={styles.searchRow}>
+            <View style={styles.searchContainer}>
+              <Searchbar
+                placeholder="Buscar acessórios..."
+                onChangeText={setSearchQuery}
+                value={searchQuery}
+                style={commonStyles.searchbar}
+                iconColor={theme.colors.onSurfaceVariant}
+                inputStyle={{ color: theme.colors.onSurface }}
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+              />
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.filterButton,
+                activeFiltersCount > 0 && styles.filterButtonActive
+              ]}
+              onPress={() => setFilterModalVisible(true)}
+            >
+              <SlidersHorizontal
+                color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant}
+                size={20}
+              />
+              {activeFiltersCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
   };
 
   const renderFilterModal = () => (
@@ -401,8 +516,9 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
       layout="grid"
       title={item.name}
       subtitle={getConsoleName(item.consoleId)}
+      subtitleStyle={{ color: '#f59e0b' }}
       imageUri={item.imageUrl}
-      placeholderIcon={<Gamepad2 size={40} color={appColors.primary} />}
+      placeholderIcon={<Gamepad2 size={40} color="#f59e0b" />}
       onPress={() => handleViewDetails(item)}
       onLongPress={() => {
         setMenuVisible(item.id);
@@ -439,11 +555,17 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
           />
         </Menu>
       }
+      badge={
+        <View style={styles.typeBadge}>
+          <Text style={styles.typeBadgeText}>{item.type}</Text>
+        </View>
+      }
       footer={
-        <View style={styles.badgeContainer}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{item.type}</Text>
-          </View>
+        <View style={styles.priceRow}>
+          <TrendingUp size={14} color="#25d07c" />
+          <Text style={styles.priceText}>
+            {showValues ? (item.pricePaid ? `R$ ${item.pricePaid.toFixed(2)}` : 'Preço N/A') : 'R$ ••••••'}
+          </Text>
         </View>
       }
     />
@@ -451,8 +573,8 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
 
   const EmptyState = () => (
     <View style={commonStyles.emptyState}>
-      <View style={commonStyles.emptyStateIcon}>
-        <Gamepad2 color={appColors.primary} size={32} />
+      <View style={[commonStyles.emptyStateIcon, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
+        <Gamepad2 color="#f59e0b" size={32} />
       </View>
       <Text style={commonStyles.emptyStateText}>Nenhum acessório cadastrado</Text>
       <Text style={commonStyles.emptyStateSubtext}>
@@ -463,43 +585,11 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
 
   return (
     <View style={[commonStyles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={commonStyles.header}>
-        <View style={styles.searchRow}>
-          <View style={styles.searchContainer}>
-            <Searchbar
-              placeholder="Buscar acessórios..."
-              onChangeText={setSearchQuery}
-              value={searchQuery}
-              style={commonStyles.searchbar}
-              iconColor={theme.colors.onSurfaceVariant}
-              inputStyle={{ color: theme.colors.onSurface }}
-              placeholderTextColor={theme.colors.onSurfaceVariant}
-            />
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              activeFiltersCount > 0 && styles.filterButtonActive
-            ]}
-            onPress={() => setFilterModalVisible(true)}
-          >
-            <SlidersHorizontal
-              color={activeFiltersCount > 0 ? '#fff' : theme.colors.onSurfaceVariant}
-              size={20}
-            />
-            {activeFiltersCount > 0 && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <FlatList
         data={filteredAccessories}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderHeader}
         contentContainerStyle={[
           styles.listContentContainer,
           filteredAccessories.length === 0 && { flex: 1 }
@@ -507,152 +597,183 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
         ListEmptyComponent={EmptyState}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
+        // Otimizações de performance
+        initialNumToRender={8}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
       />
 
       <FAB
         icon={() => <Plus color="#fff" size={24} />}
         onPress={openModal}
-        style={[commonStyles.fab, { bottom: 0 }]}
+        style={[commonStyles.fab, { bottom: 0, backgroundColor: appColors.primary }]}
       />
 
       <Portal>
         <Modal
           visible={modalVisible}
           onDismiss={() => setModalVisible(false)}
-          contentContainerStyle={commonStyles.modal}
+          contentContainerStyle={[commonStyles.modal, { maxHeight: '90%' }]}
           dismissable={true}
           dismissableBackButton={true}
         >
-          <ScrollView>
+          <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={commonStyles.modalTitle}>
               {editingAccessory ? 'Editar Acessório' : 'Novo Acessório'}
             </Text>
 
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Nome do Acessório</Text>
-              <TextInput
-                value={formData.name}
-                onChangeText={(text) => setFormData({ ...formData, name: text })}
-                style={commonStyles.input}
-                mode="flat"
-                placeholder="Ex: DualSense"
-                autoCapitalize="none"
-                autoCorrect={false}
-                blurOnSubmit={false}
-                selectionColor="#ffffff"
-                underlineColorAndroid="transparent"
-              />
+            {/* Identificação */}
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <Layout size={20} color="#f59e0b" />
+                <Text style={styles.sectionTitle}>Identificação</Text>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Nome do Acessório</Text>
+                <TextInput
+                  value={formData.name}
+                  onChangeText={(text) => setFormData({ ...formData, name: text })}
+                  style={commonStyles.input}
+                  mode="flat"
+                  placeholder="Ex: DualSense"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  selectionColor="#ffffff"
+                  underlineColorAndroid="transparent"
+                />
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Tipo</Text>
+                <Menu
+                  visible={tipoMenuVisible}
+                  onDismiss={() => setTipoMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      onPress={() => setTipoMenuVisible(true)}
+                      style={[commonStyles.input, styles.menuButton]}
+                    >
+                      <Text style={{ color: theme.colors.onSurface }}>
+                        {formData.type || 'Selecione o tipo'}
+                      </Text>
+                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                    </TouchableOpacity>
+                  }
+                >
+                  {TIPOS.map((tipo) => (
+                    <Menu.Item
+                      key={tipo}
+                      onPress={() => {
+                        setFormData({ ...formData, type: tipo });
+                        setTipoMenuVisible(false);
+                      }}
+                      title={tipo}
+                    />
+                  ))}
+                </Menu>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Console</Text>
+                <Menu
+                  visible={consoleMenuVisible}
+                  onDismiss={() => setConsoleMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      onPress={() => setConsoleMenuVisible(true)}
+                      style={[commonStyles.input, styles.menuButton]}
+                    >
+                      <Text style={{ color: theme.colors.onSurface }}>
+                        {formData.consoleId ? getConsoleName(formData.consoleId) : 'Selecione o console'}
+                      </Text>
+                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                    </TouchableOpacity>
+                  }
+                >
+                  {consoles.map((console) => (
+                    <Menu.Item
+                      key={console.id}
+                      onPress={() => {
+                        setFormData({ ...formData, consoleId: console.id });
+                        setConsoleMenuVisible(false);
+                      }}
+                      title={console.name}
+                    />
+                  ))}
+                </Menu>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Notas / História do Acessório</Text>
+                <TextInput
+                  value={formData.description}
+                  onChangeText={(text) => setFormData({ ...formData, description: text })}
+                  style={[commonStyles.input, { height: 100 }]}
+                  mode="flat"
+                  multiline
+                  numberOfLines={4}
+                  placeholder="Conte um pouco sobre este acessório..."
+                  placeholderTextColor={theme.colors.onSurfaceVariant}
+                />
+              </View>
             </View>
 
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Tipo</Text>
-              <Menu
-                visible={tipoMenuVisible}
-                onDismiss={() => setTipoMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    onPress={() => setTipoMenuVisible(true)}
-                    style={[commonStyles.input, styles.menuButton]}
-                  >
-                    <Text style={{ color: theme.colors.onSurface }}>
-                      {formData.type || 'Selecione o tipo'}
-                    </Text>
-                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                  </TouchableOpacity>
-                }
-              >
-                {TIPOS.map((tipo) => (
-                  <Menu.Item
-                    key={tipo}
-                    onPress={() => {
-                      setFormData({ ...formData, type: tipo });
-                      setTipoMenuVisible(false);
-                    }}
-                    title={tipo}
-                  />
-                ))}
-              </Menu>
-            </View>
+            {/* Estado e Valor */}
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <Tag size={20} color="#f59e0b" />
+                <Text style={styles.sectionTitle}>Estado & Valor</Text>
+              </View>
 
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Console</Text>
-              <Menu
-                visible={consoleMenuVisible}
-                onDismiss={() => setConsoleMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    onPress={() => setConsoleMenuVisible(true)}
-                    style={[commonStyles.input, styles.menuButton]}
-                  >
-                    <Text style={{ color: theme.colors.onSurface }}>
-                      {formData.consoleId ? getConsoleName(formData.consoleId) : 'Selecione o console'}
-                    </Text>
-                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                  </TouchableOpacity>
-                }
-              >
-                {consoles.map((console) => (
-                  <Menu.Item
-                    key={console.id}
-                    onPress={() => {
-                      setFormData({ ...formData, consoleId: console.id });
-                      setConsoleMenuVisible(false);
-                    }}
-                    title={console.name}
-                  />
-                ))}
-              </Menu>
-            </View>
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Condição</Text>
+                <Menu
+                  visible={condicaoMenuVisible}
+                  onDismiss={() => setCondicaoMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      onPress={() => setCondicaoMenuVisible(true)}
+                      style={[commonStyles.input, styles.menuButton]}
+                    >
+                      <Text style={{ color: theme.colors.onSurface }}>
+                        {formData.condition || 'Selecione a condição'}
+                      </Text>
+                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                    </TouchableOpacity>
+                  }
+                >
+                  {CONDICOES.map((condition) => (
+                    <Menu.Item
+                      key={condition}
+                      onPress={() => {
+                        setFormData({ ...formData, condition });
+                        setCondicaoMenuVisible(false);
+                      }}
+                      title={condition}
+                    />
+                  ))}
+                </Menu>
+              </View>
 
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Condição</Text>
-              <Menu
-                visible={condicaoMenuVisible}
-                onDismiss={() => setCondicaoMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    onPress={() => setCondicaoMenuVisible(true)}
-                    style={[commonStyles.input, styles.menuButton]}
-                  >
-                    <Text style={{ color: theme.colors.onSurface }}>
-                      {formData.condition || 'Selecione a condição'}
-                    </Text>
-                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                  </TouchableOpacity>
-                }
-              >
-                {['Novo', 'Como novo', 'Bom', 'Regular', 'Ruim'].map((condition) => (
-                  <Menu.Item
-                    key={condition}
-                    onPress={() => {
-                      setFormData({ ...formData, condition });
-                      setCondicaoMenuVisible(false);
-                    }}
-                    title={condition}
-                  />
-                ))}
-              </Menu>
-            </View>
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Preço Pago (R$)</Text>
+                <TextInput
+                  value={formData.pricePaid}
+                  onChangeText={(text) => {
+                    const sanitizedText = text.replace(/[^0-9.]/g, '');
+                    setFormData({ ...formData, pricePaid: sanitizedText });
+                  }}
+                  style={commonStyles.input}
+                  mode="flat"
+                  placeholder="Ex: 299.90"
+                  keyboardType="numeric"
+                  selectionColor="#ffffff"
+                  underlineColorAndroid="transparent"
+                />
+              </View>
 
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Preço Pago (R$)</Text>
-              <TextInput
-                value={formData.pricePaid}
-                onChangeText={(text) => {
-                  // Permitir apenas números e ponto decimal
-                  const sanitizedText = text.replace(/[^0-9.]/g, '');
-                  setFormData({ ...formData, pricePaid: sanitizedText });
-                }}
-                style={commonStyles.input}
-                mode="flat"
-                placeholder="Ex: 299.90"
-                keyboardType="numeric"
-                selectionColor="#ffffff"
-                underlineColorAndroid="transparent"
-              />
-            </View>
-
-            <View style={commonStyles.formGroup}>
               <DatePicker
                 label="Data de Compra"
                 value={formData.purchaseDate}
@@ -661,165 +782,166 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
               />
             </View>
 
-            <View style={commonStyles.formGroup}>
+            {/* Manutenção */}
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <ShieldCheck size={20} color="#f59e0b" />
+                <Text style={styles.sectionTitle}>Cuidado & Manutenção</Text>
+              </View>
+
               <DatePicker
-                label="Data da Última Manutenção"
+                label="Última Manutenção"
                 value={formData.lastMaintenanceDate}
                 onChange={(date) => setFormData({ ...formData, lastMaintenanceDate: date })}
                 style={commonStyles.formGroup}
               />
-            </View>
 
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Intervalo de Manutenção (meses)</Text>
-              <View style={styles.intervalContainer}>
-                {[3, 6, 12, 24].map((months) => (
-                  <TouchableOpacity
-                    key={months}
-                    style={[
-                      styles.intervalButton,
-                      formData.maintenanceInterval === months && styles.intervalButtonActive
-                    ]}
-                    onPress={() => setFormData({ ...formData, maintenanceInterval: months })}
-                  >
-                    <Text
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Intervalo de Manutenção (meses)</Text>
+                <View style={styles.intervalContainer}>
+                  {[3, 6, 12, 24].map((months) => (
+                    <TouchableOpacity
+                      key={months}
                       style={[
-                        styles.intervalButtonText,
-                        formData.maintenanceInterval === months && styles.intervalButtonTextActive
+                        styles.intervalButton,
+                        formData.maintenanceInterval === months && styles.intervalButtonActive
                       ]}
+                      onPress={() => setFormData({ ...formData, maintenanceInterval: months })}
                     >
-                      {months}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={[commonStyles.formGroup, styles.switchContainer]}>
-              <View style={styles.switchLabelContainer}>
-                <Bell size={18} color={theme.colors.onSurfaceVariant} />
-                <Text style={[commonStyles.label, styles.switchLabel]}>
-                  Notificar sobre manutenção
-                </Text>
-              </View>
-              <Switch
-                value={formData.notifyMaintenance}
-                onValueChange={async (value) => {
-                  setFormData({ ...formData, notifyMaintenance: value });
-                  if (value) {
-                    const permissionGranted = await requestNotificationPermissions();
-                    if (!permissionGranted) {
-                      showAlert({
-                        title: 'Permissão de Notificação',
-                        message: 'Para receber lembretes de manutenção, é necessário permitir notificações nas configurações do aplicativo.',
-                        buttons: [{ text: 'OK', onPress: () => { } }]
-                      });
-                    }
-                  }
-                }}
-                color={appColors.primary}
-              />
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <Text style={commonStyles.label}>Descrição da Manutenção</Text>
-              <TextInput
-                value={formData.maintenanceDescription}
-                onChangeText={(text) => setFormData({ ...formData, maintenanceDescription: text })}
-                style={commonStyles.input}
-                mode="flat"
-                multiline
-                numberOfLines={3}
-                placeholder="Descreva a última manutenção realizada"
-                placeholderTextColor={theme.colors.onSurfaceVariant}
-              />
-            </View>
-
-            <View style={commonStyles.formGroup}>
-              <View style={styles.labelContainer}>
-                <ImageIcon size={18} color={theme.colors.onSurfaceVariant} />
-                <Text style={[commonStyles.label, styles.labelText]}>Imagem do Acessório</Text>
-              </View>
-              {formData.imageUrl ? (
-                <View style={styles.imagePreviewContainer}>
-                  <Image
-                    source={{ uri: formData.imageUrl }}
-                    style={styles.imagePreview}
-                    resizeMode="cover"
-                  />
-                  <TouchableOpacity
-                    style={styles.removeImageButton}
-                    onPress={() => setFormData({ ...formData, imageUrl: '' })}
-                  >
-                    <X color="#fff" size={20} />
-                  </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.intervalButtonText,
+                          formData.maintenanceInterval === months && styles.intervalButtonTextActive
+                        ]}
+                      >
+                        {months}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.imageUploader}
-                  onPress={async () => {
-                    try {
-                      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                      if (!permission.granted) {
+              </View>
+
+              <View style={[commonStyles.formGroup, styles.switchContainer]}>
+                <View style={styles.switchLabelContainer}>
+                  <Bell size={18} color={theme.colors.onSurfaceVariant} />
+                  <Text style={[commonStyles.label, styles.switchLabel]}>
+                    Notificar manutenção
+                  </Text>
+                </View>
+                <Switch
+                  value={formData.notifyMaintenance}
+                  onValueChange={async (value) => {
+                    setFormData({ ...formData, notifyMaintenance: value });
+                    if (value) {
+                      const permissionGranted = await requestNotificationPermissions();
+                      if (!permissionGranted) {
                         showAlert({
-                          title: 'Permissão necessária',
-                          message: 'Precisamos de acesso à sua galeria para selecionar uma imagem.',
+                          title: 'Permissão',
+                          message: 'Ative as notificações para receber alertas.',
                           buttons: [{ text: 'OK', onPress: () => { } }]
                         });
-                        return;
                       }
-
-                      const result = await ImagePicker.launchImageLibraryAsync({
-                        mediaTypes: 'images',
-                        allowsEditing: true,
-                        aspect: [4, 3],
-                        quality: 0.8,
-                      });
-
-                      if (!result.canceled) {
-                        const processedImage = await ImageManipulator.manipulateAsync(
-                          result.assets[0].uri,
-                          [{ resize: { width: 800, height: 600 } }],
-                          { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-                        );
-
-                        setFormData({ ...formData, imageUrl: processedImage.uri });
-                      }
-                    } catch (error) {
-                      console.error('Erro ao selecionar imagem:', error);
-                      showAlert({
-                        title: 'Erro',
-                        message: 'Não foi possível selecionar a imagem.',
-                        buttons: [{ text: 'OK', onPress: () => { } }]
-                      });
                     }
                   }}
-                >
-                  <Upload size={32} color="#94a3b8" />
-                  <Text style={styles.imageUploaderText}>
-                    Toque para selecionar uma imagem
-                  </Text>
-                  <Text style={styles.imageUploaderSubtext}>
-                    A imagem será ajustada para o formato 4:3
-                  </Text>
-                </TouchableOpacity>
-              )}
+                  color="#f59e0b"
+                />
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                <Text style={commonStyles.label}>Descrição da Manutenção</Text>
+                <TextInput
+                  value={formData.maintenanceDescription}
+                  onChangeText={(text) => setFormData({ ...formData, maintenanceDescription: text })}
+                  style={commonStyles.input}
+                  mode="flat"
+                  multiline
+                  numberOfLines={2}
+                  placeholder="O que foi feito?"
+                  placeholderTextColor={theme.colors.onSurfaceVariant}
+                />
+              </View>
+            </View>
+
+            {/* Mídia */}
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <ImageIcon size={20} color="#f59e0b" />
+                <Text style={styles.sectionTitle}>Mídia</Text>
+              </View>
+
+              <View style={commonStyles.formGroup}>
+                {formData.imageUrl ? (
+                  <View style={styles.imagePreviewContainer}>
+                    <Image
+                      source={{ uri: formData.imageUrl }}
+                      style={styles.imagePreview}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => setFormData({ ...formData, imageUrl: '' })}
+                    >
+                      <X color="#fff" size={20} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.imageUploader}
+                    onPress={async () => {
+                      try {
+                        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                        if (!permission.granted) {
+                          showAlert({
+                            title: 'Permissão',
+                            message: 'Precisamos de acesso à galeria.',
+                            buttons: [{ text: 'OK', onPress: () => { } }]
+                          });
+                          return;
+                        }
+
+                        const result = await ImagePicker.launchImageLibraryAsync({
+                          mediaTypes: 'images',
+                          allowsEditing: true,
+                          aspect: [4, 3],
+                          quality: 0.8,
+                        });
+
+                        if (!result.canceled) {
+                          const processedImage = await ImageManipulator.manipulateAsync(
+                            result.assets[0].uri,
+                            [{ resize: { width: 800, height: 600 } }],
+                            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+                          );
+                          setFormData({ ...formData, imageUrl: processedImage.uri });
+                        }
+                      } catch (error) {
+                        console.error('Erro ao selecionar imagem:', error);
+                        showAlert({ title: 'Erro', message: 'Não foi possível selecionar a imagem.' });
+                      }
+                    }}
+                  >
+                    <Upload size={32} color="#94a3b8" />
+                    <Text style={styles.imageUploaderText}>Toque para adicionar foto</Text>
+                    <Text style={styles.imageUploaderSubtext}>Formato 4:3 recomendado</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             <Button
               mode="contained"
               onPress={handleAddAccessory}
-              style={[commonStyles.button, { backgroundColor: appColors.primary }]}
+              style={[commonStyles.button, { backgroundColor: '#f59e0b', marginTop: 24 }]}
               labelStyle={commonStyles.buttonText}
             >
-              {editingAccessory ? 'Salvar Alterações' : 'Adicionar Acessório'}
+              {editingAccessory ? 'Salvar Alterações' : 'Cadastrar Acessório'}
             </Button>
 
             <Button
-              mode="outlined"
+              mode="text"
               onPress={() => setModalVisible(false)}
-              style={[commonStyles.button, { marginTop: 12 }]}
-              labelStyle={[commonStyles.buttonText, { color: theme.colors.onSurface }]}
+              style={[{ marginTop: 4, marginBottom: 20 }]}
+              labelStyle={[commonStyles.buttonText, { color: theme.colors.onSurfaceVariant, fontSize: 14 }]}
             >
               Cancelar
             </Button>
@@ -834,39 +956,113 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
 
 const styles = StyleSheet.create({
   listContentContainer: {
-    padding: 8,
+    paddingBottom: 100,
   },
   columnWrapper: {
+    paddingHorizontal: 16,
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
   },
-
-  menuButton: {
+  headerTop: {
+    paddingTop: 10,
+    marginBottom: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroImage: {
+    height: 200,
+    width: '100%',
+  },
+  heroImageStyle: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'flex-end',
+    padding: 24,
+    paddingBottom: 40,
+  },
+  heroContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+  statsBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-  },
-
-
-  badgeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
     gap: 6,
   },
-  badge: {
-    backgroundColor: 'rgba(37, 99, 235, 0.15)', // Primary color opacity
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+  statsIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  badgeText: {
-    fontSize: 10,
+  statsBadgeText: {
     color: '#ffffff',
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  menuIcon: {
-    padding: 8,
+  summaryCardContainer: {
+    marginTop: -30,
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    flexDirection: 'row',
+    borderRadius: 20,
+    padding: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  summaryDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  headerControls: {
+    paddingHorizontal: 24,
+    marginBottom: 16,
   },
   searchRow: {
     flexDirection: 'row',
@@ -880,14 +1076,14 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   filterButtonActive: {
-    backgroundColor: appColors.primary,
+    backgroundColor: '#f59e0b',
     borderColor: 'transparent',
   },
   filterBadge: {
@@ -907,67 +1103,114 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  modalHeader: {
+  menuButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
   },
-  resetButton: {
-    color: appColors.primary,
-    fontSize: 14,
+  badgeContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  formSection: {
+    marginBottom: 24,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
   intervalContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    marginTop: 8,
   },
   intervalButton: {
-    padding: 8,
+    flex: 1,
+    height: 44,
     borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   intervalButtonActive: {
-    borderColor: appColors.primary,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: '#f59e0b',
   },
   intervalButtonText: {
-    color: '#94a3b8',
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
     fontWeight: '600',
   },
   intervalButtonTextActive: {
-    color: appColors.primary,
+    color: '#f59e0b',
   },
   switchContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    padding: 12,
+    borderRadius: 16,
   },
   switchLabelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   switchLabel: {
-    color: '#94a3b8',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  labelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  labelText: {
-    marginLeft: 8,
     marginBottom: 0,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  imageUploader: {
+    height: 160,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  imageUploaderText: {
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  imageUploaderSubtext: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 11,
+    marginTop: 4,
   },
   imagePreviewContainer: {
-    position: 'relative',
-    borderRadius: 12,
+    height: 200,
+    borderRadius: 20,
     overflow: 'hidden',
-    aspectRatio: 4 / 3,
+    marginTop: 8,
   },
   imagePreview: {
     width: '100%',
@@ -975,34 +1218,45 @@ const styles = StyleSheet.create({
   },
   removeImageButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  imageUploader: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderStyle: 'dashed',
-    padding: 24,
-    alignItems: 'center',
+    top: 10,
+    right: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
-    aspectRatio: 4 / 3,
+    alignItems: 'center',
   },
-  imageUploaderText: {
-    color: '#94a3b8',
-    fontSize: 16,
-    marginTop: 12,
-    textAlign: 'center',
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  imageUploaderSubtext: {
-    color: '#64748b',
-    fontSize: 14,
-    marginTop: 4,
-    textAlign: 'center',
+  resetButton: {
+    color: '#f59e0b',
+  },
+  typeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#f59e0b',
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    color: '#ffffff',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  priceText: {
+    color: '#25d07c',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
 });
 

@@ -4,7 +4,7 @@ import { Text, Card, useTheme, IconButton, Button, Portal, Modal, Avatar, Search
 import { getGames, getConsoles, getAccessories, getWishlistItems, clearAllData } from '../services/storage';
 import { checkAndNotifyOverdue, getOverdueMaintenanceItems } from '../services/notifications';
 import { SearchItem, Game, Console, Accessory } from '../types';
-import { Search, Menu as MenuIcon, Save, Upload, X, Gamepad, Disc3, Settings, Eye, Wrench, Calendar, Plus, ChevronRight, LayoutGrid, Heart, Sparkles, Package, DollarSign, AlertTriangle, RefreshCw, Clock, Trash2 } from 'lucide-react-native';
+import { Search, Menu as MenuIcon, Save, Upload, X, Gamepad, Gamepad2, Disc3, Settings, Eye, Wrench, Calendar, Plus, ChevronRight, LayoutGrid, Heart, Sparkles, Package, DollarSign, AlertTriangle, RefreshCw, Clock, Trash2, TrendingUp, Info } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { appColors } from '../theme';
@@ -214,7 +214,7 @@ const HomeScreen = () => {
         totalEstimatedWishlist,
 
         recentGames,
-        wishlistItems: wishlist.map(w => ({ id: w.id, name: w.name, type: 'game' as const, image: w.imageUrl, originalItem: w })),
+        wishlistItems: wishlist.map(w => ({ id: w.id, name: w.name, type: w.type, image: w.imageUrl, originalItem: w })),
       });
 
       // Prepare items for global search
@@ -316,6 +316,24 @@ const HomeScreen = () => {
   const handleCreateBackupFromModal = async () => {
     setBackupModalVisible(false);
     await handleCreateBackup();
+  };
+  const getColorForType = (type: string) => {
+    switch (type) {
+      case 'game': return appColors.primary;
+      case 'console': return appColors.console;
+      case 'accessory': return '#f59e0b'; // Orange
+      default: return appColors.mutedForeground;
+    }
+  };
+
+  const getIconForType = (type: string, color?: string) => {
+    const iconColor = color || '#ffffff';
+    switch (type) {
+      case 'game': return <Disc3 size={20} color={iconColor} />;
+      case 'console': return <Gamepad2 size={20} color={iconColor} />;
+      case 'accessory': return <Package size={20} color={iconColor} />;
+      default: return <Info size={20} color={iconColor} />;
+    }
   };
 
   const handleRestoreBackupFromModal = () => {
@@ -705,103 +723,30 @@ const HomeScreen = () => {
 
                 {/* Quick Stats Row */}
                 <View style={styles.quickStatsRow}>
-                  <View style={[styles.quickStatCard, { backgroundColor: 'rgba(74, 155, 255, 0.1)' }]}>
+                  <View style={[styles.quickStatCard, { backgroundColor: `${appColors.primary}15` }]}>
                     <Disc3 color={appColors.primary} size={24} />
                     <Text style={styles.quickStatValue}>{stats.games}</Text>
                     <Text style={styles.quickStatLabel}>Jogos</Text>
                   </View>
 
-                  <View style={[styles.quickStatCard, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                    <Gamepad color="#10b981" size={24} />
+                  <View style={[styles.quickStatCard, { backgroundColor: `${appColors.console}15` }]}>
+                    <Gamepad color={appColors.console} size={24} />
                     <Text style={styles.quickStatValue}>{stats.consoles}</Text>
                     <Text style={styles.quickStatLabel}>Consoles</Text>
                   </View>
 
-                  <View style={[styles.quickStatCard, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-                    <DollarSign color="#f59e0b" size={24} />
+                  <View style={[styles.quickStatCard, { backgroundColor: 'rgba(37, 208, 124, 0.1)' }]}>
+                    <DollarSign color="#25d07c" size={24} />
                     <Text style={styles.quickStatValue}>
                       {showValues ?
                         `R$ ${Math.floor(stats.totalInvested + stats.totalInvestedAccessories + stats.totalInvestedGames)}` :
-                        '****'}
+                        '••••'}
                     </Text>
                     <Text style={styles.quickStatLabel}>Total</Text>
                   </View>
                 </View>
 
-                {/* Recent Games Section */}
-                {stats.recentGames.length > 0 && (
-                  <View style={styles.sectionContainer}>
-                    <View style={styles.sectionHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Clock color={appColors.primary} size={18} />
-                        <Text style={[styles.sectionTitle, { marginLeft: 8 }]}>Adicionados Recentemente</Text>
-                      </View>
-                      <TouchableOpacity onPress={() => navigation.navigate('GamesStack')}>
-                        <Text style={{ color: appColors.primary, fontSize: 14 }}>Ver todos</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
-                      {stats.recentGames.map((game, index) => (
-                        <TouchableOpacity
-                          key={game.id}
-                          style={styles.recentGameCard}
-                          onPress={() => navigation.navigate('GameDetails', { game })}
-                        >
-                          {game.imageUrl ? (
-                            <Card.Cover source={{ uri: game.imageUrl }} style={styles.recentGameCover} />
-                          ) : (
-                            <View style={[styles.recentGameCover, { backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' }]}>
-                              <Gamepad color={appColors.primary} size={32} />
-                            </View>
-                          )}
-
-                          <View style={styles.recentGameInfo}>
-                            <Text style={styles.recentGameTitle} numberOfLines={1}>{game.name}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-
-                {/* Wishlist Mini-Carousel */}
-                {stats.wishlistItems.length > 0 && (
-                  <View style={styles.sectionContainer}>
-                    <View style={styles.sectionHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Heart color={appColors.primary} size={18} />
-                        <Text style={[styles.sectionTitle, { marginLeft: 8 }]}>Desejados</Text>
-                      </View>
-                      <TouchableOpacity onPress={() => navigation.navigate('Wishlist')}>
-                        <Text style={{ color: appColors.primary, fontSize: 14 }}>Ver todos</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
-                      {stats.wishlistItems.slice(0, 5).map((item) => (
-                        <TouchableOpacity
-                          key={item.id}
-                          style={styles.wishlistMiniCard}
-                          onPress={() => navigation.navigate('Wishlist')}
-                        >
-                          <Avatar.Icon
-                            size={40}
-                            icon={() => <Heart color="#ffffff" size={20} />}
-                            style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
-                          />
-                          <View style={{ marginTop: 8 }}>
-                            <Text style={styles.wishlistMiniTitle} numberOfLines={1}>{item.name}</Text>
-                            <Text style={styles.wishlistMiniPrice}>
-                              {item.originalItem.estimatedPrice ? `R$ ${item.originalItem.estimatedPrice}` : 'Preço N/A'}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-
+                {/* Categories Section (Moved to top) */}
                 <View style={styles.sectionContainer}>
                   <View style={styles.sectionHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -879,6 +824,81 @@ const HomeScreen = () => {
                     </View>
                   </View>
                 </View>
+
+                {/* Recent Games Section */}
+                {stats.recentGames.length > 0 && (
+                  <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Clock color={appColors.primary} size={18} />
+                        <Text style={[styles.sectionTitle, { marginLeft: 8 }]}>Adicionados Recentemente</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => navigation.navigate('GamesStack')}>
+                        <Text style={{ color: appColors.primary, fontSize: 14 }}>Ver todos</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
+                      {stats.recentGames.map((game, index) => (
+                        <TouchableOpacity
+                          key={game.id}
+                          style={styles.recentGameCard}
+                          onPress={() => navigation.navigate('GameDetails', { game })}
+                        >
+                          {game.imageUrl ? (
+                            <Card.Cover source={{ uri: game.imageUrl }} style={styles.recentGameCover} />
+                          ) : (
+                            <View style={[styles.recentGameCover, { backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' }]}>
+                              <Gamepad color={appColors.primary} size={32} />
+                            </View>
+                          )}
+
+                          <View style={styles.recentGameInfo}>
+                            <Text style={styles.recentGameTitle} numberOfLines={1}>{game.name}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Wishlist Mini-Carousel */}
+                {stats.wishlistItems.length > 0 && (
+                  <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Heart color={appColors.primary} size={18} />
+                        <Text style={[styles.sectionTitle, { marginLeft: 8 }]}>Desejados</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => navigation.navigate('Wishlist')}>
+                        <Text style={{ color: appColors.primary, fontSize: 14 }}>Ver todos</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
+                      {stats.wishlistItems.slice(0, 5).map((item) => (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={styles.wishlistMiniCard}
+                          onPress={() => navigation.navigate('Wishlist')}
+                        >
+                          <View style={[styles.wishlistMiniIconCircle, { backgroundColor: `${getColorForType(item.type)}20` }]}>
+                            {getIconForType(item.type, getColorForType(item.type))}
+                          </View>
+                          <View style={{ marginTop: 8 }}>
+                            <Text style={styles.wishlistMiniTitle} numberOfLines={1}>{item.name}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <TrendingUp size={10} color="#25d07c" />
+                              <Text style={[styles.wishlistMiniPrice, { color: '#25d07c' }]}>
+                                {showValues ? (item.originalItem.estimatedPrice ? `R$ ${item.originalItem.estimatedPrice.toFixed(2)}` : 'Preço N/A') : 'R$ ••••••'}
+                              </Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </>
             )}
           </>
@@ -1403,6 +1423,13 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  wishlistMiniIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   wishlistMiniTitle: {
     color: '#ffffff',

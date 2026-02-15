@@ -7,6 +7,7 @@ import { appColors } from '../theme';
 interface ItemCardProps {
     title: string;
     subtitle?: string;
+    subtitleStyle?: any;
     imageUri?: string;
     onPress: () => void;
     onLongPress?: () => void;
@@ -16,11 +17,13 @@ interface ItemCardProps {
     placeholderIcon?: React.ReactNode;
     coverOverlay?: React.ReactNode;
     layout?: 'list' | 'grid';
+    badge?: React.ReactNode;
 }
 
-export const ItemCard: React.FC<ItemCardProps> = ({
+export const ItemCard = React.memo<ItemCardProps>(({
     title,
     subtitle,
+    subtitleStyle,
     imageUri,
     onPress,
     onLongPress,
@@ -30,6 +33,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
     placeholderIcon,
     coverOverlay,
     layout = 'list',
+    badge,
 }) => {
     const theme = useTheme();
 
@@ -53,6 +57,11 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                                 </View>
                             )}
                             {coverOverlay}
+                            {badge && (
+                                <View style={styles.badgeOverlay}>
+                                    {badge}
+                                </View>
+                            )}
                         </View>
 
                         <View style={styles.gridInfoContainer}>
@@ -62,7 +71,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                                         {title}
                                     </Text>
                                     {subtitle && (
-                                        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                                        <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }, subtitleStyle]} numberOfLines={1}>
                                             {subtitle}
                                         </Text>
                                     )}
@@ -110,7 +119,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
                                     {title}
                                 </Text>
                                 {subtitle && (
-                                    <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]} numberOfLines={1}>
+                                    <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }, subtitleStyle]} numberOfLines={1}>
                                         {subtitle}
                                     </Text>
                                 )}
@@ -124,7 +133,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({
             </Card>
         </TouchableOpacity>
     );
-};
+});
 
 const styles = StyleSheet.create({
     container: {
@@ -219,5 +228,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: 4,
+    },
+    badgeOverlay: {
+        position: 'absolute',
+        top: 8,
+        left: 8,
     },
 });

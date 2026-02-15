@@ -1,45 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Divider } from 'react-native-paper';
-import { Calendar, Tag, Gamepad, Bookmark, Star, ArrowLeft, ExternalLink, Monitor, Layers, Book, ImageIcon, Globe } from 'lucide-react-native';
-import { getConsoles } from '../services/storage';
+import { Divider, Menu, Portal, Modal, Button, TextInput } from 'react-native-paper';
+import {
+  Calendar, Tag, Gamepad, Bookmark, Star, ArrowLeft, ExternalLink, Monitor,
+  Layers, Book, ImageIcon, Globe, MoreVertical, Edit, Trash2, ShoppingBag,
+  DollarSign, Info, Trophy, Clock
+} from 'lucide-react-native';
+import { getConsoles, deleteGame } from '../services/storage';
 import { formatImageUrl, getGameDetails } from '../services/igdbApi';
 import darkTheme, { appColors } from '../theme';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
+import { commonStyles } from '../theme/commonStyles';
+import { formatDate, formatCurrency } from '../utils/formatters';
+import { translateText } from '../services/translate';
+import { Alert } from 'react-native';
 
-// Função para traduzir texto usando a API do Google Translate
-const translateText = async (text: string, targetLanguage = 'pt') => {
-  if (!text) return '';
-
-  try {
-    // Usando a API pública do Google Translate
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLanguage}&dt=t&q=${encodeURIComponent(text)}`;
-    const response = await fetch(url);
-    const data = await response.json();
-
-    // A resposta vem em um formato específico, precisamos extrair o texto traduzido
-    let translatedText = '';
-    if (data && data[0]) {
-      data[0].forEach((item: any) => {
-        if (item[0]) {
-          translatedText += item[0];
-        }
-      });
-    }
-
-    return translatedText;
-  } catch (error) {
-    console.error('Erro ao traduzir texto:', error);
-    return text; // Retorna o texto original em caso de erro
-  }
-};
 
 const GameDetailsScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { game } = route.params as { game: any };
   const { showValues } = useValuesVisibility();
+  const theme = darkTheme;
+
   const [consoleName, setConsoleName] = useState('');
   const [igdbDetails, setIgdbDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -49,24 +33,23 @@ const GameDetailsScreen = () => {
   const [translatedStoryline, setTranslatedStoryline] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
   const [usingLocalData, setUsingLocalData] = useState(false);
+  const [gameMenuVisible, setGameMenuVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<'info' | 'media'>('info');
 
   useEffect(() => {
     const fetchConsoleName = async () => {
       if (game.consoleId) {
         const consoles = await getConsoles();
-        const console = consoles.find(c => c.id === game.consoleId);
-        if (console) {
-          setConsoleName(console.name);
+        const consoleObj = consoles.find(c => c.id === game.consoleId);
+        if (consoleObj) {
+          setConsoleName(consoleObj.name);
         }
       }
     };
 
     const fetchIGDBDetails = async () => {
-      console.log('GameDetailsScreen - Dados do jogo:', JSON.stringify(game));
-
       // Primeiro, verificar se temos dados salvos localmente
       if (game.igdbData) {
-        console.log('Usando dados IGDB salvos localmente');
         setIgdbDetails(game.igdbData);
         setUsingLocalData(true);
         return;
@@ -74,72 +57,33 @@ const GameDetailsScreen = () => {
 
       // Se não houver dados salvos, buscar da API
       if (!game.igdbId) {
-        console.log('Nenhum ID IGDB fornecido para o jogo:', game.name);
         setIgdbDetails(null);
         return;
       }
 
-      console.log('Buscando detalhes do jogo da API com ID:', game.igdbId);
-      console.log('Tipo do ID:', typeof game.igdbId);
-
       // Garantir que o ID seja um número
       let gameId;
-
       if (typeof game.igdbId === 'string') {
-        // Remover qualquer caractere não numérico
         const cleanId = game.igdbId.replace(/[^0-9]/g, '');
-        console.log('ID limpo (apenas números):', cleanId);
-
         if (cleanId) {
           gameId = parseInt(cleanId, 10);
         } else {
-          console.error('ID do jogo não contém números válidos:', game.igdbId);
           setIgdbDetails(null);
-          setLoading(false);
           return;
         }
       } else {
         gameId = game.igdbId;
       }
 
-      console.log('ID convertido para número:', gameId);
-
       if (isNaN(gameId) || gameId <= 0) {
-        console.error('ID do jogo inválido após conversão:', gameId);
         setIgdbDetails(null);
-        setLoading(false);
         return;
       }
 
       setLoading(true);
       setUsingLocalData(false);
       try {
-        // Forçar uma nova requisição sem usar o cache
         const details = await getGameDetails(gameId, false);
-        console.log('IGDB Details recebidos da API:', details ? 'Sim' : 'Não');
-        if (details) {
-          console.log('IGDB Details ID:', details.id);
-          console.log('IGDB Details Nome:', details.name);
-          console.log('IGDB Details Plataformas:', details.platforms ? details.platforms.length : 0);
-          console.log('IGDB Details História:', details.storyline ? 'Sim' : 'Não');
-          console.log('IGDB Details Resumo:', details.summary ? 'Sim' : 'Não');
-
-          // Log de todas as propriedades do objeto para depuração
-          console.log('IGDB Details - Todas as propriedades:', Object.keys(details));
-
-          // Log de propriedades específicas
-          if (details.involved_companies) {
-            console.log('IGDB Details - Empresas envolvidas:', details.involved_companies.length);
-          }
-          if (details.websites) {
-            console.log('IGDB Details - Websites:', details.websites.length);
-          }
-          if (details.screenshots) {
-            console.log('IGDB Details - Screenshots:', details.screenshots.length);
-          }
-        } else {
-          console.log('Nenhum detalhe recebido da API');
-        }
         setIgdbDetails(details);
       } catch (error) {
         console.error('Erro ao buscar detalhes do IGDB:', error);
@@ -153,37 +97,6 @@ const GameDetailsScreen = () => {
     fetchIGDBDetails();
   }, [game]);
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Data não disponível';
-
-    try {
-      // Verificar se a data já está no formato DD/MM/YYYY
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
-        return dateString;
-      }
-
-      // Tentar converter para Date e formatar
-      const date = new Date(dateString);
-
-      // Verificar se a data é válida
-      if (isNaN(date.getTime())) {
-        // Tentar converter de formato DD/MM/YYYY para Date
-        const [day, month, year] = dateString.split('/');
-        if (day && month && year) {
-          const newDate = new Date(Number(year), Number(month) - 1, Number(day));
-          if (!isNaN(newDate.getTime())) {
-            return dateString; // Já está no formato correto
-          }
-        }
-        return 'Data inválida';
-      }
-
-      return date.toLocaleDateString('pt-BR');
-    } catch (error) {
-      console.error('Erro ao formatar data:', error);
-      return 'Data inválida';
-    }
-  };
 
   const formatRating = (rating: number) => {
     return rating ? (rating / 10).toFixed(1) : 'N/A';
@@ -191,7 +104,6 @@ const GameDetailsScreen = () => {
 
   const getCompanies = (type: 'developer' | 'publisher') => {
     if (!igdbDetails?.involved_companies) return [];
-
     return igdbDetails.involved_companies
       .filter((company: any) => company[type])
       .map((company: any) => company.company.name);
@@ -203,41 +115,22 @@ const GameDetailsScreen = () => {
 
   const getWebsiteLabel = (category: number) => {
     const categories: Record<number, string> = {
-      1: 'Site Oficial',
-      2: 'Wikia',
-      3: 'Wikipedia',
-      4: 'Facebook',
-      5: 'Twitter',
-      6: 'Twitch',
-      8: 'Instagram',
-      9: 'YouTube',
-      10: 'iPhone',
-      11: 'iPad',
-      12: 'Android',
-      13: 'Steam',
-      14: 'Reddit',
-      15: 'Itch',
-      16: 'Epic Games',
-      17: 'GOG',
-      18: 'Discord'
+      1: 'Site Oficial', 2: 'Wikia', 3: 'Wikipedia', 4: 'Facebook', 5: 'Twitter',
+      6: 'Twitch', 8: 'Instagram', 9: 'YouTube', 10: 'iPhone', 11: 'iPad',
+      12: 'Android', 13: 'Steam', 14: 'Reddit', 15: 'Itch', 16: 'Epic Games',
+      17: 'GOG', 18: 'Discord'
     };
     return categories[category] || 'Link';
   };
 
-  // Função para traduzir o resumo e a história
   const handleTranslate = async () => {
     if (!igdbDetails) return;
-
     setTranslating(true);
-
     try {
-      // Traduzir o resumo se existir
       if (igdbDetails.summary) {
         const summary = await translateText(igdbDetails.summary);
         setTranslatedSummary(summary);
       }
-
-      // Traduzir a história se existir
       if (igdbDetails.storyline) {
         const storyline = await translateText(igdbDetails.storyline);
         setTranslatedStoryline(storyline);
@@ -249,562 +142,403 @@ const GameDetailsScreen = () => {
     }
   };
 
+  const handleEditGame = () => {
+    // @ts-ignore
+    navigation.navigate('GamesList', { editingGame: game });
+  };
+
+  const handleDeleteGame = () => {
+    Alert.alert(
+      'Confirmar exclusão',
+      'Tem certeza que deseja excluir este jogo?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteGame(game.id);
+              navigation.goBack();
+            } catch (error) {
+              console.error('Erro ao excluir jogo:', error);
+              Alert.alert('Erro', 'Não foi possível excluir o jogo.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.imageContainer}>
-        {game.imageUrl ? (
-          <>
-            <Image source={{ uri: game.imageUrl }} style={styles.image} resizeMode="cover" />
-            <View style={styles.imageOverlay} />
-          </>
-        ) : (
-          <View style={styles.placeholderImage}>
-            <Gamepad size={80} color={appColors.primary} />
-          </View>
-        )}
-      </View>
-
-      <View style={styles.content}>
-        <Text style={styles.title}>{game.name}</Text>
-
-        <View style={styles.badgeContainer}>
-          {game.genre && (
-            <View style={styles.badge}>
-              <Tag size={14} color={appColors.foreground} style={styles.badgeIcon} />
-              <Text style={styles.badgeText}>{game.genre}</Text>
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.heroContainer}>
+          {game.imageUrl ? (
+            <Image source={{ uri: game.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+          ) : (
+            <View style={styles.placeholderHero}>
+              <Gamepad size={80} color={appColors.primary} />
             </View>
           )}
+          <View style={styles.heroGradient} />
 
-          {consoleName && (
-            <View style={styles.badge}>
-              <Gamepad size={14} color={appColors.foreground} style={styles.badgeIcon} />
-              <Text style={styles.badgeText}>{consoleName}</Text>
-            </View>
-          )}
-        </View>
+          {/* Floating Action Buttons over Hero */}
+          <View style={styles.heroActions}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.heroActionButton}>
+              <ArrowLeft color="#fff" size={24} />
+            </TouchableOpacity>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informações Gerais</Text>
-          <Divider style={styles.divider} />
+            <Menu
+              visible={gameMenuVisible}
+              onDismiss={() => setGameMenuVisible(false)}
+              anchor={
+                <TouchableOpacity onPress={() => setGameMenuVisible(true)} style={styles.heroActionButton}>
+                  <MoreVertical color="#fff" size={24} />
+                </TouchableOpacity>
+              }
+            >
+              <Menu.Item
+                onPress={() => { setGameMenuVisible(false); handleEditGame(); }}
+                title="Editar Jogo"
+                leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
+              />
+              <Divider />
+              <Menu.Item
+                onPress={() => { setGameMenuVisible(false); handleDeleteGame(); }}
+                title="Excluir Jogo"
+                leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
+                titleStyle={{ color: appColors.destructive }}
+              />
+            </Menu>
+          </View>
 
-          <View style={styles.infoRow}>
-            <View style={styles.infoItem}>
-              <Calendar size={20} color={appColors.primary} />
-              <Text style={styles.infoLabel}>Ano de Lançamento</Text>
-              <Text style={styles.infoValue}>{game.releaseYear || 'Não informado'}</Text>
-            </View>
-
-            <View style={styles.infoItem}>
-              <Monitor size={20} color={appColors.primary} />
-              <Text style={styles.infoLabel}>Formato</Text>
-              <Text style={styles.infoValue}>{game.isPhysical ? 'Físico' : 'Digital'}</Text>
+          <View style={styles.heroTitleContainer}>
+            <Text style={styles.heroTitleMain}>{game.name}</Text>
+            <View style={styles.mainBadgeRow}>
+              {game.genre && (
+                <View style={[styles.solidBadge, { backgroundColor: appColors.primary }]}>
+                  <Tag size={12} color="#fff" />
+                  <Text style={styles.solidBadgeText}>{game.genre}</Text>
+                </View>
+              )}
+              {consoleName && (
+                <View style={[styles.solidBadge, { backgroundColor: appColors.console }]}>
+                  <Gamepad size={12} color="#fff" />
+                  <Text style={styles.solidBadgeText}>{consoleName}</Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informações de Compra</Text>
-          <Divider style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <View style={styles.infoItem}>
-              <Bookmark size={20} color={appColors.primary} />
-              <Text style={styles.infoLabel}>Data de Aquisição</Text>
-              <Text style={styles.infoValue}>{formatDate(game.purchaseDate)}</Text>
+        {/* Global Summary Card (Floating) */}
+        <View style={styles.summaryCardWrapper}>
+          <View style={[styles.glassSummaryCard, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Lançamento</Text>
+              <Text style={styles.summaryValue}>{game.releaseYear || 'N/A'}</Text>
             </View>
-          </View>
-
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Preço Pago:</Text>
-            <Text style={styles.priceValue}>
-              {showValues ? `R$ ${(game.pricePaid || 0).toFixed(2)}` : 'R$ ******'}
-            </Text>
-          </View>
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={appColors.primary} />
-            <Text style={styles.loadingText}>Carregando detalhes da IGDB...</Text>
-          </View>
-        ) : (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Detalhes da IGDB</Text>
-
-              <View style={styles.sectionHeaderRight}>
-                {usingLocalData && (
-                  <View style={styles.localDataBadge}>
-                    <Text style={styles.localDataText}>Dados Locais</Text>
-                  </View>
-                )}
-                {igdbDetails && (igdbDetails.summary || igdbDetails.storyline) && (
-                  <TouchableOpacity
-                    style={styles.translateButton}
-                    onPress={handleTranslate}
-                    disabled={translating}
-                  >
-                    {translating ? (
-                      <ActivityIndicator size="small" color={appColors.primary} />
-                    ) : (
-                      <>
-                        <Globe size={16} color={appColors.primary} style={styles.translateIcon} />
-                        <Text style={styles.translateButtonText}>
-                          {translatedSummary || translatedStoryline ? 'Traduzido' : 'Traduzir'}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Formato</Text>
+              <Text style={[styles.summaryValue, { color: appColors.primary }]}>
+                {game.isPhysical ? 'Físico' : 'Digital'}
+              </Text>
             </View>
-
-            <Divider style={styles.divider} />
-
-            {!igdbDetails && game.igdbId ? (
-              <View>
-                <Text style={styles.noDataText}>Não foi possível carregar os detalhes da IGDB.</Text>
-                <Text style={styles.noDataText}>ID IGDB: {game.igdbId}</Text>
-                <Text style={styles.noDataText}>Isso pode ocorrer se o jogo não estiver cadastrado na base de dados da IGDB ou se houver problemas de conexão.</Text>
-              </View>
-            ) : !game.igdbId ? (
-              <View>
-                <Text style={styles.noDataText}>Este jogo não possui um ID IGDB associado.</Text>
-                <Text style={styles.noDataText}>Você pode editar o jogo e adicionar um ID IGDB para ver informações detalhadas.</Text>
-              </View>
-            ) : (
+            {igdbDetails?.rating && (
               <>
-                {/* Resumo - Renderização simplificada */}
-                <View style={styles.detailItem}>
-                  <View style={styles.detailLabelContainer}>
-                    <Tag size={18} color={appColors.primary} style={styles.detailIcon} />
-                    <Text style={styles.detailLabel}>Resumo</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {translatedSummary
-                      ? (showFullDescription
-                        ? translatedSummary
-                        : (translatedSummary.length > 150
-                          ? translatedSummary.substring(0, 150) + '...'
-                          : translatedSummary))
-                      : igdbDetails?.summary
-                        ? (showFullDescription
-                          ? igdbDetails.summary
-                          : (igdbDetails.summary.length > 150
-                            ? igdbDetails.summary.substring(0, 150) + '...'
-                            : igdbDetails.summary))
-                        : 'Informação não disponível'}
-                  </Text>
-                  {((translatedSummary && translatedSummary.length > 150) ||
-                    (igdbDetails?.summary && igdbDetails.summary.length > 150)) && (
-                      <TouchableOpacity onPress={() => setShowFullDescription(!showFullDescription)}>
-                        <Text style={styles.readMore}>
-                          {showFullDescription ? 'Mostrar menos' : 'Ler mais'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                </View>
-
-                {/* Classificação */}
-                {(igdbDetails?.rating || igdbDetails?.aggregated_rating) && (
-                  <View style={styles.detailItem}>
-                    <View style={styles.detailLabelContainer}>
-                      <Star size={18} color={appColors.primary} style={styles.detailIcon} />
-                      <Text style={styles.detailLabel}>Classificação</Text>
-                    </View>
-                    <View style={styles.ratingsContainer}>
-                      {igdbDetails?.rating && (
-                        <View style={styles.ratingItem}>
-                          <Star size={16} color={appColors.primary} />
-                          <Text style={styles.ratingLabel}>Usuários:</Text>
-                          <Text style={styles.ratingValue}>{formatRating(igdbDetails.rating)}/10</Text>
-                          <Text style={styles.ratingCount}>({igdbDetails.rating_count || 0} votos)</Text>
-                        </View>
-                      )}
-
-                      {igdbDetails?.aggregated_rating && (
-                        <View style={styles.ratingItem}>
-                          <Star size={16} color={appColors.primary} />
-                          <Text style={styles.ratingLabel}>Críticos:</Text>
-                          <Text style={styles.ratingValue}>{formatRating(igdbDetails.aggregated_rating)}/10</Text>
-                          <Text style={styles.ratingCount}>({igdbDetails.aggregated_rating_count || 0} críticas)</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                )}
-
-                {/* Desenvolvedores */}
-                {getCompanies('developer').length > 0 && (
-                  <View style={styles.detailItem}>
-                    <View style={styles.detailLabelContainer}>
-                      <Monitor size={18} color={appColors.primary} style={styles.detailIcon} />
-                      <Text style={styles.detailLabel}>Desenvolvedores</Text>
-                    </View>
-                    <Text style={styles.detailValue}>{getCompanies('developer').join(', ')}</Text>
-                  </View>
-                )}
-
-                {/* Publicadoras */}
-                {getCompanies('publisher').length > 0 && (
-                  <View style={styles.detailItem}>
-                    <View style={styles.detailLabelContainer}>
-                      <Bookmark size={18} color={appColors.primary} style={styles.detailIcon} />
-                      <Text style={styles.detailLabel}>Publicadoras</Text>
-                    </View>
-                    <Text style={styles.detailValue}>{getCompanies('publisher').join(', ')}</Text>
-                  </View>
-                )}
-
-                {/* Plataformas Suportadas */}
-                <View style={styles.detailItem}>
-                  <View style={styles.detailLabelContainer}>
-                    <Layers size={18} color={appColors.primary} style={styles.detailIcon} />
-                    <Text style={styles.detailLabel}>Plataformas Suportadas</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {igdbDetails?.platforms ?
-                      igdbDetails.platforms.map((platform: any) => platform.name).join(', ') :
-                      'Informação não disponível'}
-                  </Text>
-                </View>
-
-                {/* História */}
-                <View style={styles.detailItem}>
-                  <View style={styles.detailLabelContainer}>
-                    <Book size={18} color={appColors.primary} style={styles.detailIcon} />
-                    <Text style={styles.detailLabel}>História</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {translatedStoryline
-                      ? (showFullStoryline
-                        ? translatedStoryline
-                        : (translatedStoryline.length > 150
-                          ? translatedStoryline.substring(0, 150) + '...'
-                          : translatedStoryline))
-                      : igdbDetails?.storyline
-                        ? (showFullStoryline
-                          ? igdbDetails.storyline
-                          : (igdbDetails.storyline.length > 150
-                            ? igdbDetails.storyline.substring(0, 150) + '...'
-                            : igdbDetails.storyline))
-                        : 'Informação não disponível'}
-                  </Text>
-                  {((translatedStoryline && translatedStoryline.length > 150) ||
-                    (igdbDetails?.storyline && igdbDetails.storyline.length > 150)) && (
-                      <TouchableOpacity onPress={() => setShowFullStoryline(!showFullStoryline)}>
-                        <Text style={styles.readMore}>
-                          {showFullStoryline ? 'Mostrar menos' : 'Ler mais'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                </View>
-
-                {/* Modos de Jogo */}
-                {igdbDetails?.game_modes && igdbDetails.game_modes.length > 0 && (
-                  <View style={styles.detailItem}>
-                    <View style={styles.detailLabelContainer}>
-                      <Gamepad size={18} color={appColors.primary} style={styles.detailIcon} />
-                      <Text style={styles.detailLabel}>Modos de Jogo</Text>
-                    </View>
-                    <Text style={styles.detailValue}>
-                      {igdbDetails.game_modes.map((mode: any) => mode.name).join(', ')}
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Rating</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Star size={14} color="#f59e0b" fill="#f59e0b" />
+                    <Text style={[styles.summaryValue, { color: '#f59e0b' }]}>
+                      {(igdbDetails.rating / 10).toFixed(1)}
                     </Text>
                   </View>
-                )}
-
-                {/* Temas */}
-                {igdbDetails?.themes && igdbDetails.themes.length > 0 && (
-                  <View style={styles.detailItem}>
-                    <View style={styles.detailLabelContainer}>
-                      <Tag size={18} color={appColors.primary} style={styles.detailIcon} />
-                      <Text style={styles.detailLabel}>Temas</Text>
-                    </View>
-                    <Text style={styles.detailValue}>
-                      {igdbDetails.themes.map((theme: any) => theme.name).join(', ')}
-                    </Text>
-                  </View>
-                )}
-
-                {/* Capturas de Tela */}
-                {igdbDetails?.screenshots && igdbDetails.screenshots.length > 0 && (
-                  <View style={styles.detailItem}>
-                    <View style={styles.detailLabelContainer}>
-                      <ImageIcon size={18} color={appColors.primary} style={styles.detailIcon} />
-                      <Text style={styles.detailLabel}>Capturas de Tela</Text>
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.screenshotsContainer}>
-                      {igdbDetails.screenshots.map((screenshot: any, index: number) => (
-                        <Image
-                          key={index}
-                          source={{ uri: formatImageUrl(screenshot.image_id, 'screenshot') }}
-                          style={styles.screenshotImage}
-                        />
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
+                </View>
               </>
             )}
           </View>
-        )}
-      </View>
-    </ScrollView>
+        </View>
+
+        <View style={styles.content}>
+          {/* Purchase Details - Always Visible */}
+          <View style={styles.premiumSection}>
+            <View style={styles.sectionTitleRow}>
+              <ShoppingBag size={20} color={appColors.primary} />
+              <Text style={styles.premiumSectionTitle}>Detalhes da Aquisição</Text>
+            </View>
+            <View style={styles.premiumInfoGrid}>
+              <View style={styles.premiumInfoCard}>
+                <Calendar size={18} color={theme.colors.onSurfaceVariant} />
+                <View>
+                  <Text style={styles.premiumInfoLabel}>Comprado em</Text>
+                  <Text style={styles.premiumInfoValue}>{formatDate(game.purchaseDate)}</Text>
+                </View>
+              </View>
+              <View style={styles.premiumInfoCard}>
+                <Globe size={18} color={theme.colors.onSurfaceVariant} />
+                <View>
+                  <Text style={styles.premiumInfoLabel}>Região</Text>
+                  <Text style={styles.premiumInfoValue}>{game.region || 'N/A'}</Text>
+                </View>
+              </View>
+            </View>
+            {game.pricePaid !== undefined && (
+              <View style={styles.premiumPriceCard}>
+                <View style={styles.row}>
+                  <DollarSign size={20} color="#25d07c" />
+                  <Text style={styles.premiumPriceLabel}>Valor Pago</Text>
+                </View>
+                <Text style={[styles.premiumPriceValue, { color: '#25d07c' }]}>
+                  {showValues ? formatCurrency(game.pricePaid) : 'R$ ••••••'}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* IGDB Content - Only if available */}
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={appColors.primary} />
+              <Text style={styles.loadingText}>Carregando detalhes...</Text>
+            </View>
+          ) : igdbDetails ? (
+            <>
+              <View style={styles.divider} />
+
+              {/* Tabs Navigation */}
+              <View style={styles.tabsContainer}>
+                <TouchableOpacity style={[styles.tab, activeTab === 'info' && styles.tabActive]} onPress={() => setActiveTab('info')} activeOpacity={0.7}>
+                  <Info size={18} color={activeTab === 'info' ? appColors.primary : darkTheme.colors.onSurfaceVariant} />
+                  <Text style={[styles.tabText, activeTab === 'info' && styles.tabTextActive]}>Informações</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tab, activeTab === 'media' && styles.tabActive]} onPress={() => setActiveTab('media')} activeOpacity={0.7}>
+                  <ImageIcon size={18} color={activeTab === 'media' ? appColors.primary : darkTheme.colors.onSurfaceVariant} />
+                  <Text style={[styles.tabText, activeTab === 'media' && styles.tabTextActive]}>Mídia</Text>
+                </TouchableOpacity>
+              </View>
+
+              {activeTab === 'info' ? (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Sinopse & Detalhes</Text>
+                    {(igdbDetails.summary || igdbDetails.storyline) && (
+                      <TouchableOpacity
+                        style={styles.translateButton}
+                        onPress={handleTranslate}
+                        disabled={translating}
+                      >
+                        {translating ? (
+                          <ActivityIndicator size="small" color={appColors.primary} />
+                        ) : (
+                          <>
+                            <Globe size={16} color={appColors.primary} style={styles.translateIcon} />
+                            <Text style={styles.translateButtonText}>
+                              {translatedSummary || translatedStoryline ? 'Traduzido' : 'Traduzir'}
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Summary */}
+                  {igdbDetails?.summary && (
+                    <View style={styles.descriptionCard}>
+                      <Text style={styles.descriptionTitle}>RESUMO</Text>
+                      <Text style={styles.descriptionText}>
+                        {translatedSummary || igdbDetails.summary}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Storyline */}
+                  {(igdbDetails?.storyline || translatedStoryline) && (
+                    <View style={[styles.descriptionCard, { marginTop: 12 }]}>
+                      <Text style={styles.descriptionTitle}>ENREDO</Text>
+                      <Text style={styles.descriptionText}>
+                        {translatedStoryline || igdbDetails.storyline}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Developers & Publishers */}
+                  <View style={[styles.premiumSection, { marginTop: 24 }]}>
+                    <View style={styles.infoRow}>
+                      {getCompanies('developer').length > 0 && (
+                        <View style={styles.infoColumn}>
+                          <Text style={styles.infoColumnLabel}>Desenvolvedor</Text>
+                          <Text style={styles.infoColumnValue}>{getCompanies('developer')[0]}</Text>
+                        </View>
+                      )}
+                      {getCompanies('publisher').length > 0 && (
+                        <View style={styles.infoColumn}>
+                          <Text style={styles.infoColumnLabel}>Publicadora</Text>
+                          <Text style={styles.infoColumnValue}>{getCompanies('publisher')[0]}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Platforms */}
+                  {igdbDetails?.platforms && (
+                    <View style={styles.detailItem}>
+                      <Text style={styles.detailLabel}>Plataformas Suportadas</Text>
+                      <View style={styles.tagsContainer}>
+                        {igdbDetails.platforms.map((platform: any) => (
+                          <View key={platform.id} style={styles.tagBadge}>
+                            <Text style={styles.tagText}>{platform.name}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Themes/Genres/Modes/Perspectives */}
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Detalhes do Jogo</Text>
+                    <View style={styles.tagsContainer}>
+                      {igdbDetails?.themes?.map((theme: any) => (
+                        <View key={`theme-${theme.id}`} style={styles.tagBadge}>
+                          <Text style={styles.tagText}>{theme.name}</Text>
+                        </View>
+                      ))}
+                      {igdbDetails?.genres?.map((genre: any) => (
+                        <View key={`genre-${genre.id}`} style={styles.tagBadge}>
+                          <Text style={styles.tagText}>{genre.name}</Text>
+                        </View>
+                      ))}
+                      {igdbDetails?.game_modes?.map((mode: any) => (
+                        <View key={`mode-${mode.id}`} style={styles.tagBadge}>
+                          <Text style={styles.tagText}>{mode.name}</Text>
+                        </View>
+                      ))}
+                      {igdbDetails?.player_perspectives?.map((perspective: any) => (
+                        <View key={`perspective-${perspective.id}`} style={styles.tagBadge}>
+                          <Text style={styles.tagText}>{perspective.name}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Galeria e Links</Text>
+                  </View>
+
+                  {igdbDetails?.screenshots && igdbDetails.screenshots.length > 0 ? (
+                    <View>
+                      {igdbDetails.screenshots.map((screenshot: any, index: number) => (
+                        <View key={index} style={styles.screenshotCard}>
+                          <Image
+                            source={{ uri: formatImageUrl(screenshot.image_id, 'screenshot') }}
+                            style={styles.screenshotImage}
+                            resizeMode="cover"
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <ImageIcon size={48} color={darkTheme.colors.onSurfaceVariant} />
+                      <Text style={styles.emptyStateText}>Nenhuma imagem disponível</Text>
+                    </View>
+                  )}
+
+                  {igdbDetails?.websites && igdbDetails.websites.length > 0 && (
+                    <View style={{ marginTop: 24 }}>
+                      <Text style={styles.detailLabel}>Links Externos</Text>
+                      <View style={styles.websitesContainer}>
+                        {igdbDetails.websites.map((website: any, index: number) => (
+                          <TouchableOpacity key={index} style={styles.websiteButton} onPress={() => openWebsite(website.url)}>
+                            <ExternalLink size={16} color={appColors.primary} />
+                            <Text style={styles.websiteButtonText}>{getWebsiteLabel(website.category)}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          ) : null}
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: darkTheme.colors.background,
-  },
-  imageContainer: {
-    height: 250,
-    backgroundColor: darkTheme.colors.surfaceVariant,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  placeholderImage: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: darkTheme.colors.surfaceVariant,
-  },
-  content: {
-    padding: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: darkTheme.colors.onBackground,
-    marginBottom: 12,
-    letterSpacing: 0.5,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-  },
-  badge: {
-    backgroundColor: appColors.primary,
-    marginRight: 8,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  badgeIcon: {
-    marginRight: 4,
-  },
-  badgeText: {
-    color: appColors.foreground,
-    fontWeight: '500',
-  },
-  section: {
-    marginBottom: 24,
-    backgroundColor: darkTheme.colors.surface,
-    borderRadius: 8,
-    padding: 16,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: appColors.primary,
-    marginBottom: 8,
-  },
-  divider: {
-    backgroundColor: darkTheme.colors.outlineVariant,
-    height: 1,
-    marginBottom: 16,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  infoItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: darkTheme.colors.onSurfaceVariant,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: darkTheme.colors.onSurface,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  loadingContainer: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    color: darkTheme.colors.onSurfaceVariant,
-  },
-  detailItem: {
-    marginBottom: 16,
-  },
-  detailLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: darkTheme.colors.onSurface,
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 15,
-    color: darkTheme.colors.onSurfaceVariant,
-    lineHeight: 22,
-  },
-  readMore: {
-    color: appColors.primary,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  ratingsContainer: {
-    marginTop: 8,
-  },
-  ratingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  ratingLabel: {
-    fontSize: 14,
-    color: darkTheme.colors.onSurfaceVariant,
-    marginLeft: 8,
-    marginRight: 4,
-  },
-  ratingValue: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: darkTheme.colors.onSurface,
-  },
-  ratingCount: {
-    fontSize: 13,
-    color: darkTheme.colors.onSurfaceVariant,
-    marginLeft: 4,
-  },
-  websitesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-  },
-  websiteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: darkTheme.colors.surfaceVariant,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  websiteButtonText: {
-    color: appColors.primary,
-    fontWeight: '500',
-    marginLeft: 6,
-  },
-  screenshotsContainer: {
-    marginTop: 8,
-  },
-  screenshotImage: {
-    width: 280,
-    height: 158,
-    borderRadius: 8,
-    marginRight: 8,
-  },
-  noDataText: {
-    fontSize: 15,
-    color: darkTheme.colors.onSurfaceVariant,
-    fontStyle: 'italic',
-  },
-  detailLabelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  detailIcon: {
-    marginRight: 8,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  sectionHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  localDataBadge: {
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#22c55e',
-  },
-  localDataText: {
-    color: '#22c55e',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  translateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: appColors.primary,
-  },
-  translateIcon: {
-    marginRight: 4,
-  },
-  translateButtonText: {
-    color: appColors.primary,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  priceContainer: {
-    marginTop: 12,
-    backgroundColor: 'rgba(0, 120, 255, 0.1)',
-    padding: 12,
-    borderRadius: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  priceLabel: {
-    color: darkTheme.colors.onSurface,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  priceValue: {
-    color: darkTheme.colors.primary,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  imageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
+  container: { flex: 1, backgroundColor: '#000' },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingBottom: 100 },
+  heroContainer: { height: 400, width: '100%', position: 'relative' },
+  heroImageFull: { width: '100%', height: '100%' },
+  placeholderHero: { width: '100%', height: '100%', backgroundColor: '#18181b', justifyContent: 'center', alignItems: 'center' },
+  heroGradient: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  heroActions: { position: 'absolute', top: 50, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 10 },
+  heroActionButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  heroTitleContainer: { position: 'absolute', bottom: 60, left: 24, right: 24 },
+  heroTitleMain: { fontSize: 32, fontWeight: 'bold', color: '#ffffff', textShadowColor: 'rgba(0, 0, 0, 0.75)', textShadowOffset: { width: -1, height: 1 }, textShadowRadius: 10 },
+  mainBadgeRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  solidBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 6 },
+  solidBadgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase' },
+  summaryCardWrapper: { marginTop: -40, paddingHorizontal: 20, zIndex: 20 },
+  glassSummaryCard: { flexDirection: 'row', borderRadius: 24, padding: 24, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
+  summaryValue: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
+  summaryDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 15 },
+  content: { paddingHorizontal: 20, paddingTop: 30 },
+  tabsContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16, padding: 6, marginBottom: 24 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 12, gap: 8 },
+  tabActive: { backgroundColor: 'rgba(74, 155, 255, 0.1)' },
+  tabText: { fontSize: 14, color: 'rgba(255,255,255,0.4)', fontWeight: '500' },
+  tabTextActive: { color: appColors.primary, fontWeight: 'bold' },
+  premiumSection: { marginBottom: 24 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+  premiumSectionTitle: { fontSize: 18, fontWeight: 'bold', color: appColors.primary, letterSpacing: 0.5 },
+  premiumInfoGrid: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  premiumInfoCard: { flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  premiumInfoLabel: { fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 0.5 },
+  premiumInfoValue: { fontSize: 14, color: '#fff', fontWeight: '600', marginTop: 2 },
+  premiumPriceCard: { backgroundColor: 'rgba(37, 208, 124, 0.05)', borderRadius: 16, padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(37, 208, 124, 0.1)' },
+  premiumPriceLabel: { fontSize: 14, color: '#25d07c', fontWeight: '600', marginLeft: 8 },
+  premiumPriceValue: { fontSize: 18, fontWeight: 'bold' },
+  section: { marginBottom: 24 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginBottom: 0 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  divider: { backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 16 },
+  descriptionCard: { backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  descriptionTitle: { fontSize: 12, fontWeight: 'bold', color: appColors.primary, marginBottom: 12, letterSpacing: 1 },
+  descriptionText: { fontSize: 15, color: 'rgba(255,255,255,0.8)', lineHeight: 24 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
+  infoColumn: { flex: 1 },
+  infoColumnLabel: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 4 },
+  infoColumnValue: { fontSize: 15, color: '#fff', fontWeight: '500' },
+  detailItem: { marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 16 },
+  detailLabel: { fontSize: 14, fontWeight: 'bold', color: appColors.primary, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 },
+  tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tagBadge: { backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  tagText: { color: '#e2e8f0', fontSize: 13 },
+  screenshotCard: { marginBottom: 16, borderRadius: 16, overflow: 'hidden', height: 200, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  screenshotImage: { width: '100%', height: '100%' },
+  emptyState: { alignItems: 'center', padding: 40, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 16 },
+  emptyStateText: { color: 'rgba(255,255,255,0.5)', marginTop: 12 },
+  websitesContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  websiteButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(74, 155, 255, 0.1)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, gap: 6 },
+  websiteButtonText: { color: appColors.primary, fontWeight: '600', fontSize: 13 },
+  translateButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.05)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: appColors.primary },
+  translateIcon: { marginRight: 4 },
+  translateButtonText: { color: appColors.primary, fontSize: 12, fontWeight: '500' },
+  loadingContainer: { padding: 40, alignItems: 'center' },
+  loadingText: { marginTop: 16, color: 'rgba(255,255,255,0.5)', fontSize: 14 },
+  noDataText: { fontSize: 15, color: darkTheme.colors.onSurfaceVariant, fontStyle: 'italic', textAlign: 'center', marginVertical: 20 },
+  row: { flexDirection: 'row', alignItems: 'center' },
 });
 
 export default GameDetailsScreen; 

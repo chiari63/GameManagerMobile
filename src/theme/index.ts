@@ -5,6 +5,7 @@ const colors = {
   // Cores primárias
   primary: '#4a9bff', // Azul mais claro usado nos ícones e elementos interativos
   secondary: '#3b82f6', // Azul secundário
+  console: '#6366f1', // Indigo premium para consoles
 
   // Cores de fundo e texto
   background: '#121212', // Fundo preto/cinza muito escuro (Material Design dark theme background)
@@ -36,7 +37,7 @@ const colors = {
     '#25d07c', // Verde (25%)
     '#f59e0b', // Laranja/Amarelo (20%)
     '#ff5757', // Vermelho (10%)
-    '#d957ff', // Rosa/Roxo (5%)
+    '#6366f1', // Indigo (Console branding)
     '#90caf9', // Azul claro (90% no gráfico de região)
     '#26a69a', // Verde-azulado (10% no gráfico de região)
   ],

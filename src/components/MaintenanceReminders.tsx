@@ -5,8 +5,7 @@ import { MaintenanceItem } from '../types';
 import { getConsoles, getAccessories, updateConsole, updateAccessory } from '../services/storage';
 import { getUpcomingMaintenanceItems } from '../services/notifications';
 import { Wrench, Calendar, ChevronRight } from 'lucide-react-native';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { formatLongDate } from '../utils/formatters';
 
 interface MaintenanceRemindersProps {
   onItemPress?: (item: MaintenanceItem) => void;
@@ -26,7 +25,7 @@ const MaintenanceReminders: React.FC<MaintenanceRemindersProps> = ({ onItemPress
       setLoading(true);
       const consoles = await getConsoles();
       const accessories = await getAccessories();
-      
+
       const items = getUpcomingMaintenanceItems(consoles, accessories);
       setMaintenanceItems(items);
     } catch (error) {
@@ -39,17 +38,17 @@ const MaintenanceReminders: React.FC<MaintenanceRemindersProps> = ({ onItemPress
   const handleMarkAsDone = async (item: MaintenanceItem) => {
     try {
       const today = new Date().toISOString();
-      
+
       if (item.type === 'console') {
-        await updateConsole(item.id, { 
-          lastMaintenanceDate: today 
+        await updateConsole(item.id, {
+          lastMaintenanceDate: today
         });
       } else {
-        await updateAccessory(item.id, { 
-          lastMaintenanceDate: today 
+        await updateAccessory(item.id, {
+          lastMaintenanceDate: today
         });
       }
-      
+
       // Recarregar a lista
       await loadMaintenanceItems();
     } catch (error) {
@@ -57,14 +56,6 @@ const MaintenanceReminders: React.FC<MaintenanceRemindersProps> = ({ onItemPress
     }
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-    } catch (error) {
-      return dateString;
-    }
-  };
 
   const getUrgencyColor = (daysRemaining: number) => {
     if (daysRemaining <= 7) {
@@ -77,7 +68,7 @@ const MaintenanceReminders: React.FC<MaintenanceRemindersProps> = ({ onItemPress
   };
 
   const renderItem = ({ item }: { item: MaintenanceItem }) => (
-    <Card 
+    <Card
       style={styles.card}
       onPress={() => onItemPress && onItemPress(item)}
     >
@@ -93,7 +84,7 @@ const MaintenanceReminders: React.FC<MaintenanceRemindersProps> = ({ onItemPress
           <View style={styles.dateContainer}>
             <Calendar size={14} color="#94a3b8" />
             <Text style={styles.dateText}>
-              Manutenção: {formatDate(item.nextMaintenanceDate)}
+              Manutenção: {formatLongDate(item.nextMaintenanceDate)}
             </Text>
           </View>
           <View style={[styles.badge, { backgroundColor: `${getUrgencyColor(item.daysRemaining)}20` }]}>
