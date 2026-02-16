@@ -5,13 +5,13 @@ import { checkIGDBConnection } from '../services/igdbApi';
 import { getGames, addGame, updateGame, deleteGame, getConsoles } from '../services/storage';
 import { Game, Console } from '../types';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Gamepad2, Plus, X, Image as ImageIcon, Edit, Trash2, ChevronDown, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Search, TrendingUp, Layout, ShoppingBag, WifiOff, Settings } from 'lucide-react-native';
+import { Gamepad2, Plus, X, Image as ImageIcon, Edit, Trash2, ChevronDown, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Search, TrendingUp, Layout, ShoppingBag, WifiOff, Settings, Disc3 } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import { ItemCard } from '../components/ItemCard';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
+import { appEvents, APP_EVENTS } from '../services/events';
 import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useAlert } from '../contexts/AlertContext';
@@ -99,7 +99,7 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
     const filtered = games.filter(game => {
       const matchesSearch = !searchQuery ||
         game.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        game.genre.toLowerCase().includes(searchQuery.toLowerCase());
+        (game.genre && game.genre.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesGenre = !filters.genre || game.genre === filters.genre;
       const matchesRegion = !filters.region || game.region === filters.region;
@@ -134,14 +134,16 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
 
   // Adiciona listener para o evento de restauração
   useEffect(() => {
-    const handleRestore = () => {
+    const handleUpdate = () => {
       loadData();
     };
 
-    backupEventEmitter.on(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+    appEvents.on(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+    appEvents.on(APP_EVENTS.DATA_CHANGED, handleUpdate);
 
     return () => {
-      backupEventEmitter.off(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+      appEvents.off(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+      appEvents.off(APP_EVENTS.DATA_CHANGED, handleUpdate);
     };
   }, []);
 
@@ -163,10 +165,10 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
 
   const handleAddGame = async () => {
     // Validar campos obrigatórios
-    if (!formData.name || !formData.consoleId || !formData.genre || !formData.purchaseDate) {
+    if (!formData.name || !formData.purchaseDate) {
       showAlert({
         title: 'Erro',
-        message: 'Por favor, preencha todos os campos obrigatórios.',
+        message: 'Por favor, preencha o nome e a data de compra do jogo.',
         buttons: [{ text: 'OK', onPress: () => { } }]
       });
       return;
@@ -224,12 +226,12 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
     setEditingGame(game);
     setFormData({
       name: game.name,
-      consoleId: game.consoleId,
-      genre: game.genre,
-      region: game.region,
-      releaseYear: game.releaseYear,
-      purchaseDate: game.purchaseDate,
-      isPhysical: game.isPhysical,
+      consoleId: game.consoleId || '',
+      genre: game.genre || '',
+      region: game.region || '',
+      releaseYear: game.releaseYear || '',
+      purchaseDate: game.purchaseDate || '',
+      isPhysical: game.isPhysical ?? true,
       imageUrl: game.imageUrl || '',
       igdbId: game.igdbId,
       igdbData: game.igdbData, // Carregar dados completos do IGDB
@@ -453,38 +455,44 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
     </Portal>
   );
 
-  const renderItem = ({ item }: { item: Game }) => (
+  const renderItem = useCallback(({ item }: { item: Game }) => (
     <ItemCard
       layout="grid"
       title={item.name}
-      subtitle={getConsoleName(item.consoleId)}
+      subtitle={getConsoleName(item.consoleId || '')}
       subtitleStyle={{ color: appColors.primary }}
       imageUri={item.imageUrl}
-      placeholderIcon={<Gamepad2 size={40} color={appColors.primary} />}
+      placeholderIcon={<Disc3 size={40} color={appColors.primary} />}
       onPress={() => handleViewDetails(item)}
       onLongPress={() => setMenuVisible(item.id)}
       rightElement={
-        <Menu
-          visible={menuVisible === item.id}
-          onDismiss={() => setMenuVisible(null)}
-          anchor={
-            <TouchableOpacity onPress={() => setMenuVisible(item.id)} style={styles.menuIconButton}>
-              <MoreVertical color={theme.colors.onSurfaceVariant} size={18} />
-            </TouchableOpacity>
-          }
-        >
-          <Menu.Item
-            onPress={() => { setMenuVisible(null); handleEditGame(item); }}
-            title="Editar"
-            leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
-          />
-          <Menu.Item
-            onPress={() => { setMenuVisible(null); confirmDelete(item.id); }}
-            title="Excluir"
-            leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
-            titleStyle={{ color: appColors.destructive }}
-          />
-        </Menu>
+        menuVisible === item.id ? (
+          <Menu
+            visible={menuVisible === item.id}
+            onDismiss={() => setMenuVisible(null)}
+            anchor={
+              <TouchableOpacity onPress={() => setMenuVisible(item.id)} style={styles.menuIconButton}>
+                <MoreVertical color={theme.colors.onSurfaceVariant} size={18} />
+              </TouchableOpacity>
+            }
+          >
+            <Menu.Item
+              onPress={() => { setMenuVisible(null); handleEditGame(item); }}
+              title="Editar"
+              leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
+            />
+            <Menu.Item
+              onPress={() => { setMenuVisible(null); confirmDelete(item.id); }}
+              title="Excluir"
+              leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
+              titleStyle={{ color: appColors.destructive }}
+            />
+          </Menu>
+        ) : (
+          <TouchableOpacity onPress={() => setMenuVisible(item.id)} style={styles.menuIconButton}>
+            <MoreVertical color={theme.colors.onSurfaceVariant} size={18} />
+          </TouchableOpacity>
+        )
       }
       badge={
         <View style={styles.badgeRow}>
@@ -507,12 +515,12 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
         </View>
       }
     />
-  );
+  ), [menuVisible, consoles, theme, showValues]);
 
   const EmptyState = () => (
     <View style={commonStyles.emptyState}>
       <View style={commonStyles.emptyStateIcon}>
-        <Gamepad2 color={appColors.primary} size={32} />
+        <Disc3 color={appColors.primary} size={32} />
       </View>
       <Text style={commonStyles.emptyStateText}>Nenhum jogo cadastrado</Text>
       <Text style={commonStyles.emptyStateSubtext}>
@@ -544,7 +552,7 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
               </View>
               <View style={[styles.statsBadge, { backgroundColor: appColors.primary }]}>
                 <View style={styles.statsIconCircle}>
-                  <Gamepad2 size={16} color="#fff" />
+                  <Disc3 size={16} color="#fff" />
                 </View>
                 <Text style={styles.statsBadgeText}>JOGOS</Text>
               </View>
@@ -667,7 +675,7 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
               </View>
 
               <View style={commonStyles.formGroup}>
-                <Text style={commonStyles.label}>Nome do Jogo</Text>
+                <Text style={commonStyles.label}>Nome do Jogo *</Text>
                 <TextInput
                   value={formData.name}
                   onChangeText={(text) => setFormData({ ...formData, name: text })}
@@ -741,92 +749,128 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
 
               <View style={commonStyles.formGroup}>
                 <Text style={commonStyles.label}>Console</Text>
-                <Menu
-                  visible={consoleMenuVisible}
-                  onDismiss={() => setConsoleMenuVisible(false)}
-                  anchor={
-                    <TouchableOpacity
-                      onPress={() => setConsoleMenuVisible(true)}
-                      style={[commonStyles.input, styles.menuButton]}
-                    >
-                      <Text style={{ color: theme.colors.onSurface }}>
-                        {formData.consoleId ? getConsoleName(formData.consoleId) : 'Selecione o console'}
-                      </Text>
-                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                    </TouchableOpacity>
-                  }
-                >
-                  {consoles.map((c) => (
-                    <Menu.Item
-                      key={c.id}
-                      onPress={() => {
-                        setFormData({ ...formData, consoleId: c.id });
-                        setConsoleMenuVisible(false);
-                      }}
-                      title={c.name}
-                    />
-                  ))}
-                </Menu>
+                {consoleMenuVisible ? (
+                  <Menu
+                    visible={consoleMenuVisible}
+                    onDismiss={() => setConsoleMenuVisible(false)}
+                    anchor={
+                      <TouchableOpacity
+                        onPress={() => setConsoleMenuVisible(true)}
+                        style={[commonStyles.input, styles.menuButton]}
+                      >
+                        <Text style={{ color: theme.colors.onSurface }}>
+                          {formData.consoleId ? getConsoleName(formData.consoleId) : 'Selecione o console'}
+                        </Text>
+                        <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                      </TouchableOpacity>
+                    }
+                  >
+                    {consoles.map((c) => (
+                      <Menu.Item
+                        key={c.id}
+                        onPress={() => {
+                          setFormData({ ...formData, consoleId: c.id });
+                          setConsoleMenuVisible(false);
+                        }}
+                        title={c.name}
+                      />
+                    ))}
+                  </Menu>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setConsoleMenuVisible(true)}
+                    style={[commonStyles.input, styles.menuButton]}
+                  >
+                    <Text style={{ color: theme.colors.onSurface }}>
+                      {formData.consoleId ? getConsoleName(formData.consoleId) : 'Selecione o console'}
+                    </Text>
+                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={commonStyles.formGroup}>
                 <Text style={commonStyles.label}>Gênero</Text>
-                <Menu
-                  visible={genreMenuVisible}
-                  onDismiss={() => setGenreMenuVisible(false)}
-                  anchor={
-                    <TouchableOpacity
-                      onPress={() => setGenreMenuVisible(true)}
-                      style={[commonStyles.input, styles.menuButton]}
-                    >
-                      <Text style={{ color: theme.colors.onSurface }}>
-                        {formData.genre || 'Selecione o gênero'}
-                      </Text>
-                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                    </TouchableOpacity>
-                  }
-                >
-                  {GENEROS.map((genero) => (
-                    <Menu.Item
-                      key={genero}
-                      onPress={() => {
-                        setFormData({ ...formData, genre: genero });
-                        setGenreMenuVisible(false);
-                      }}
-                      title={genero}
-                    />
-                  ))}
-                </Menu>
+                {genreMenuVisible ? (
+                  <Menu
+                    visible={genreMenuVisible}
+                    onDismiss={() => setGenreMenuVisible(false)}
+                    anchor={
+                      <TouchableOpacity
+                        onPress={() => setGenreMenuVisible(true)}
+                        style={[commonStyles.input, styles.menuButton]}
+                      >
+                        <Text style={{ color: theme.colors.onSurface }}>
+                          {formData.genre || 'Selecione o gênero'}
+                        </Text>
+                        <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                      </TouchableOpacity>
+                    }
+                  >
+                    {GENEROS.map((genero) => (
+                      <Menu.Item
+                        key={genero}
+                        onPress={() => {
+                          setFormData({ ...formData, genre: genero });
+                          setGenreMenuVisible(false);
+                        }}
+                        title={genero}
+                      />
+                    ))}
+                  </Menu>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setGenreMenuVisible(true)}
+                    style={[commonStyles.input, styles.menuButton]}
+                  >
+                    <Text style={{ color: theme.colors.onSurface }}>
+                      {formData.genre || 'Selecione o gênero'}
+                    </Text>
+                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={commonStyles.formGroup}>
                 <Text style={commonStyles.label}>Região</Text>
-                <Menu
-                  visible={regionMenuVisible}
-                  onDismiss={() => setRegionMenuVisible(false)}
-                  anchor={
-                    <TouchableOpacity
-                      onPress={() => setRegionMenuVisible(true)}
-                      style={[commonStyles.input, styles.menuButton]}
-                    >
-                      <Text style={{ color: theme.colors.onSurface }}>
-                        {formData.region || 'Selecione a região'}
-                      </Text>
-                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                    </TouchableOpacity>
-                  }
-                >
-                  {REGIOES.map((regiao) => (
-                    <Menu.Item
-                      key={regiao}
-                      onPress={() => {
-                        setFormData({ ...formData, region: regiao });
-                        setRegionMenuVisible(false);
-                      }}
-                      title={regiao}
-                    />
-                  ))}
-                </Menu>
+                {regionMenuVisible ? (
+                  <Menu
+                    visible={regionMenuVisible}
+                    onDismiss={() => setRegionMenuVisible(false)}
+                    anchor={
+                      <TouchableOpacity
+                        onPress={() => setRegionMenuVisible(true)}
+                        style={[commonStyles.input, styles.menuButton]}
+                      >
+                        <Text style={{ color: theme.colors.onSurface }}>
+                          {formData.region || 'Selecione a região'}
+                        </Text>
+                        <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                      </TouchableOpacity>
+                    }
+                  >
+                    {REGIOES.map((regiao) => (
+                      <Menu.Item
+                        key={regiao}
+                        onPress={() => {
+                          setFormData({ ...formData, region: regiao });
+                          setRegionMenuVisible(false);
+                        }}
+                        title={regiao}
+                      />
+                    ))}
+                  </Menu>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setRegionMenuVisible(true)}
+                    style={[commonStyles.input, styles.menuButton]}
+                  >
+                    <Text style={{ color: theme.colors.onSurface }}>
+                      {formData.region || 'Selecione a região'}
+                    </Text>
+                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={commonStyles.formGroup}>
@@ -852,7 +896,7 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
 
               <View style={commonStyles.formGroup}>
                 <DatePicker
-                  label="Data de Compra"
+                  label="Data de Compra *"
                   value={formData.purchaseDate}
                   onChange={(date) => setFormData({ ...formData, purchaseDate: date })}
                   style={commonStyles.formGroup}

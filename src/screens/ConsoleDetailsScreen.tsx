@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Divider, FAB, Portal, Modal, Button, TextInput, Menu, Switch } from 'react-native-paper';
-import { Calendar, Tag, Gamepad, ExternalLink, Wrench, ShoppingBag, DollarSign, Plus, X, Image as ImageIcon, ChevronDown, Bell, MoreVertical, Edit, Trash2, Upload, Info, Gamepad2, TrendingUp, AlertTriangle, ChevronLeft, BookOpen, ArrowLeft } from 'lucide-react-native';
+import { Calendar, Tag, Gamepad, ExternalLink, Wrench, ShoppingBag, DollarSign, Plus, X, Image as ImageIcon, ChevronDown, Bell, MoreVertical, Edit, Trash2, Upload, Info, TrendingUp, AlertTriangle, ChevronLeft, BookOpen, ArrowLeft, Package } from 'lucide-react-native';
 import { getPlatformDetails } from '../services/igdbApi';
 import darkTheme, { appColors } from '../theme';
 import { ItemCard } from '../components/ItemCard';
@@ -15,7 +15,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { useAlert } from '../contexts/AlertContext';
 import { requestNotificationPermissions } from '../services/notifications';
 import { commonStyles } from '../theme/commonStyles';
-import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
+import { appEvents, APP_EVENTS } from '../services/events';
 import { formatDate, formatCurrency } from '../utils/formatters';
 
 const TIPOS = ['Controles', 'Cabos', 'Memorycards', 'Outros'];
@@ -87,12 +87,14 @@ const ConsoleDetailsScreen = () => {
   );
 
   useEffect(() => {
-    const handleRestore = () => {
+    const handleUpdate = () => {
       loadAccessories();
     };
-    backupEventEmitter.on(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+    appEvents.on(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+    appEvents.on(APP_EVENTS.DATA_CHANGED, handleUpdate);
     return () => {
-      backupEventEmitter.off(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+      appEvents.off(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+      appEvents.off(APP_EVENTS.DATA_CHANGED, handleUpdate);
     };
   }, [loadAccessories]);
 
@@ -206,8 +208,8 @@ const ConsoleDetailsScreen = () => {
     setEditingAccessory(accessory);
     setFormData({
       name: accessory.name,
-      type: accessory.type,
-      purchaseDate: accessory.purchaseDate,
+      type: accessory.type || '',
+      purchaseDate: accessory.purchaseDate || '',
       lastMaintenanceDate: accessory.lastMaintenanceDate || '',
       maintenanceDescription: accessory.maintenanceDescription || '',
       maintenanceInterval: accessory.maintenanceInterval || 6,
@@ -250,7 +252,7 @@ const ConsoleDetailsScreen = () => {
       subtitle={item.type}
       subtitleStyle={{ color: '#f59e0b' }}
       imageUri={item.imageUrl}
-      placeholderIcon={<Gamepad2 size={40} color="#f59e0b" />}
+      placeholderIcon={<Package size={40} color="#f59e0b" />}
       onPress={() => {
         // @ts-ignore
         navigation.navigate('AccessoryDetails', { accessory: item });
@@ -298,7 +300,7 @@ const ConsoleDetailsScreen = () => {
             <Image source={{ uri: console.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
           ) : (
             <View style={styles.placeholderHero}>
-              <Gamepad2 size={80} color={appColors.primary} />
+              <Gamepad size={80} color={appColors.primary} />
             </View>
           )}
           <View style={styles.heroGradient} />
@@ -379,7 +381,7 @@ const ConsoleDetailsScreen = () => {
               <Text style={[styles.tabText, activeTab === 'info' && styles.tabTextActive]}>Informações</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.tab, activeTab === 'accessories' && styles.tabActive]} onPress={() => setActiveTab('accessories')} activeOpacity={0.7}>
-              <Gamepad2 size={18} color={activeTab === 'accessories' ? appColors.primary : darkTheme.colors.onSurfaceVariant} />
+              <Package size={18} color={activeTab === 'accessories' ? appColors.primary : darkTheme.colors.onSurfaceVariant} />
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={[styles.tabText, activeTab === 'accessories' && styles.tabTextActive]}>Acessórios</Text>
                 {accessories.length > 0 && (
@@ -562,7 +564,7 @@ const ConsoleDetailsScreen = () => {
               <Divider style={styles.divider} />
               {accessories.length === 0 ? (
                 <View style={styles.emptyAccessories}>
-                  <Gamepad2 size={48} color={darkTheme.colors.onSurfaceVariant} />
+                  <Package size={48} color={darkTheme.colors.onSurfaceVariant} />
                   <Text style={styles.emptyAccessoriesText}>Nenhum acessório cadastrado</Text>
                   <Text style={styles.emptyAccessoriesSubtext}>Toque no botão + para adicionar um acessório</Text>
                 </View>

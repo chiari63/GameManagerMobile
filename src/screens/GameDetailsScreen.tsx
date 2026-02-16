@@ -5,7 +5,7 @@ import { Divider, Menu, Portal, Modal, Button, TextInput } from 'react-native-pa
 import {
   Calendar, Tag, Gamepad, Bookmark, Star, ArrowLeft, ExternalLink, Monitor,
   Layers, Book, ImageIcon, Globe, MoreVertical, Edit, Trash2, ShoppingBag,
-  DollarSign, Info, Trophy, Clock
+  DollarSign, Info, Trophy, Clock, Disc3
 } from 'lucide-react-native';
 import { getConsoles, deleteGame } from '../services/storage';
 import { formatImageUrl, getGameDetails } from '../services/igdbApi';
@@ -15,12 +15,15 @@ import { commonStyles } from '../theme/commonStyles';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { translateText } from '../services/translate';
 import { Alert } from 'react-native';
+import { appEvents, APP_EVENTS } from '../services/events';
+import { getGames } from '../services/storage';
 
 
 const GameDetailsScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { game } = route.params as { game: any };
+  const [localGame, setLocalGame] = useState(game);
   const { showValues } = useValuesVisibility();
   const theme = darkTheme;
 
@@ -36,66 +39,43 @@ const GameDetailsScreen = () => {
   const [gameMenuVisible, setGameMenuVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'media'>('info');
 
+  const loadData = useCallback(async () => {
+    try {
+      const allGames = await getGames();
+      const found = allGames.find(g => g.id === localGame.id);
+      if (found) {
+        setLocalGame(found);
+
+        if (found.consoleId) {
+          const consoles = await getConsoles();
+          const consoleObj = consoles.find(c => c.id === found.consoleId);
+          if (consoleObj) {
+            setConsoleName(consoleObj.name);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao recarregar jogo:', error);
+    }
+  }, [localGame.id]);
+
   useEffect(() => {
-    const fetchConsoleName = async () => {
-      if (game.consoleId) {
-        const consoles = await getConsoles();
-        const consoleObj = consoles.find(c => c.id === game.consoleId);
-        if (consoleObj) {
-          setConsoleName(consoleObj.name);
-        }
-      }
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      loadData();
     };
 
-    const fetchIGDBDetails = async () => {
-      // Primeiro, verificar se temos dados salvos localmente
-      if (game.igdbData) {
-        setIgdbDetails(game.igdbData);
-        setUsingLocalData(true);
-        return;
-      }
+    appEvents.on(APP_EVENTS.DATA_CHANGED, handleUpdate);
+    appEvents.on(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
 
-      // Se não houver dados salvos, buscar da API
-      if (!game.igdbId) {
-        setIgdbDetails(null);
-        return;
-      }
-
-      // Garantir que o ID seja um número
-      let gameId;
-      if (typeof game.igdbId === 'string') {
-        const cleanId = game.igdbId.replace(/[^0-9]/g, '');
-        if (cleanId) {
-          gameId = parseInt(cleanId, 10);
-        } else {
-          setIgdbDetails(null);
-          return;
-        }
-      } else {
-        gameId = game.igdbId;
-      }
-
-      if (isNaN(gameId) || gameId <= 0) {
-        setIgdbDetails(null);
-        return;
-      }
-
-      setLoading(true);
-      setUsingLocalData(false);
-      try {
-        const details = await getGameDetails(gameId, false);
-        setIgdbDetails(details);
-      } catch (error) {
-        console.error('Erro ao buscar detalhes do IGDB:', error);
-        setIgdbDetails(null);
-      } finally {
-        setLoading(false);
-      }
+    return () => {
+      appEvents.off(APP_EVENTS.DATA_CHANGED, handleUpdate);
+      appEvents.off(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
     };
-
-    fetchConsoleName();
-    fetchIGDBDetails();
-  }, [game]);
+  }, [loadData]);
 
 
   const formatRating = (rating: number) => {
@@ -144,7 +124,7 @@ const GameDetailsScreen = () => {
 
   const handleEditGame = () => {
     // @ts-ignore
-    navigation.navigate('GamesList', { editingGame: game });
+    navigation.navigate('GamesList', { editingGame: localGame });
   };
 
   const handleDeleteGame = () => {
@@ -158,7 +138,7 @@ const GameDetailsScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteGame(game.id);
+              await deleteGame(localGame.id);
               navigation.goBack();
             } catch (error) {
               console.error('Erro ao excluir jogo:', error);
@@ -174,11 +154,11 @@ const GameDetailsScreen = () => {
     <View style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroContainer}>
-          {game.imageUrl ? (
-            <Image source={{ uri: game.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+          {localGame.imageUrl ? (
+            <Image source={{ uri: localGame.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
           ) : (
             <View style={styles.placeholderHero}>
-              <Gamepad size={80} color={appColors.primary} />
+              <Disc3 size={80} color={appColors.primary} />
             </View>
           )}
           <View style={styles.heroGradient} />
@@ -214,17 +194,17 @@ const GameDetailsScreen = () => {
           </View>
 
           <View style={styles.heroTitleContainer}>
-            <Text style={styles.heroTitleMain}>{game.name}</Text>
+            <Text style={styles.heroTitleMain}>{localGame.name}</Text>
             <View style={styles.mainBadgeRow}>
-              {game.genre && (
+              {localGame.genre && (
                 <View style={[styles.solidBadge, { backgroundColor: appColors.primary }]}>
                   <Tag size={12} color="#fff" />
-                  <Text style={styles.solidBadgeText}>{game.genre}</Text>
+                  <Text style={styles.solidBadgeText}>{localGame.genre}</Text>
                 </View>
               )}
               {consoleName && (
                 <View style={[styles.solidBadge, { backgroundColor: appColors.console }]}>
-                  <Gamepad size={12} color="#fff" />
+                  <Disc3 size={12} color="#fff" />
                   <Text style={styles.solidBadgeText}>{consoleName}</Text>
                 </View>
               )}
@@ -237,13 +217,13 @@ const GameDetailsScreen = () => {
           <View style={[styles.glassSummaryCard, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Lançamento</Text>
-              <Text style={styles.summaryValue}>{game.releaseYear || 'N/A'}</Text>
+              <Text style={styles.summaryValue}>{localGame.releaseYear || 'N/A'}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Formato</Text>
               <Text style={[styles.summaryValue, { color: appColors.primary }]}>
-                {game.isPhysical ? 'Físico' : 'Digital'}
+                {localGame.isPhysical ? 'Físico' : 'Digital'}
               </Text>
             </View>
             {igdbDetails?.rating && (
@@ -275,25 +255,25 @@ const GameDetailsScreen = () => {
                 <Calendar size={18} color={theme.colors.onSurfaceVariant} />
                 <View>
                   <Text style={styles.premiumInfoLabel}>Comprado em</Text>
-                  <Text style={styles.premiumInfoValue}>{formatDate(game.purchaseDate)}</Text>
+                  <Text style={styles.premiumInfoValue}>{formatDate(localGame.purchaseDate)}</Text>
                 </View>
               </View>
               <View style={styles.premiumInfoCard}>
                 <Globe size={18} color={theme.colors.onSurfaceVariant} />
                 <View>
                   <Text style={styles.premiumInfoLabel}>Região</Text>
-                  <Text style={styles.premiumInfoValue}>{game.region || 'N/A'}</Text>
+                  <Text style={styles.premiumInfoValue}>{localGame.region || 'N/A'}</Text>
                 </View>
               </View>
             </View>
-            {game.pricePaid !== undefined && (
+            {localGame.pricePaid !== undefined && (
               <View style={styles.premiumPriceCard}>
                 <View style={styles.row}>
                   <DollarSign size={20} color="#25d07c" />
                   <Text style={styles.premiumPriceLabel}>Valor Pago</Text>
                 </View>
                 <Text style={[styles.premiumPriceValue, { color: '#25d07c' }]}>
-                  {showValues ? formatCurrency(game.pricePaid) : 'R$ ••••••'}
+                  {showValues ? formatCurrency(localGame.pricePaid) : 'R$ ••••••'}
                 </Text>
               </View>
             )}

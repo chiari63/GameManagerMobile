@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Calendar, Gamepad, Gamepad2, Package, Wrench, ShoppingBag, BookOpen, MoreVertical, Edit, Trash2, AlertTriangle, Info, ArrowLeft } from 'lucide-react-native';
@@ -9,6 +9,8 @@ import { useAlert } from '../contexts/AlertContext';
 import { deleteAccessory } from '../services/storage';
 import { Menu } from 'react-native-paper';
 import { formatDate, formatCurrency } from '../utils/formatters';
+import { appEvents, APP_EVENTS } from '../services/events';
+import { getAccessories } from '../services/storage';
 
 // Cor de destaque para acessórios (mesmo padrão da listagem)
 const ACCESSORY_ACCENT = '#f59e0b';
@@ -17,22 +19,48 @@ const AccessoryDetailsScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { accessory } = route.params as { accessory: any };
+  const [localAccessory, setLocalAccessory] = useState(accessory);
   const theme = darkTheme;
   const { showValues } = useValuesVisibility();
   const { showAlert } = useAlert();
   const [consoleName, setConsoleName] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
 
-  useEffect(() => {
-    const fetchConsoleName = async () => {
-      if (accessory.consoleId) {
-        const consoles = await getConsoles();
-        const cons = consoles.find(c => c.id === accessory.consoleId);
-        if (cons) setConsoleName(cons.name);
+  const loadData = useCallback(async () => {
+    try {
+      const allAccessories = await getAccessories();
+      const found = allAccessories.find(a => a.id === localAccessory.id);
+      if (found) {
+        setLocalAccessory(found);
+
+        if (found.consoleId) {
+          const consoles = await getConsoles();
+          const cons = consoles.find(c => c.id === found.consoleId);
+          if (cons) setConsoleName(cons.name);
+        }
       }
+    } catch (error) {
+      console.error('Erro ao recarregar acessório:', error);
+    }
+  }, [localAccessory.id]);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      loadData();
     };
-    fetchConsoleName();
-  }, [accessory]);
+
+    appEvents.on(APP_EVENTS.DATA_CHANGED, handleUpdate);
+    appEvents.on(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+
+    return () => {
+      appEvents.off(APP_EVENTS.DATA_CHANGED, handleUpdate);
+      appEvents.off(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+    };
+  }, [loadData]);
 
 
   const handleEditAccessory = () => {
@@ -44,7 +72,7 @@ const AccessoryDetailsScreen = () => {
     setMenuVisible(false);
     showAlert({
       title: 'Excluir Acessório',
-      message: `Tem certeza que deseja excluir "${accessory.name}"? Esta ação não pode ser desfeita.`,
+      message: `Tem certeza que deseja excluir "${localAccessory.name}"? Esta ação não pode ser desfeita.`,
       buttons: [
         { text: 'Cancelar', onPress: () => { }, style: 'cancel' },
         {
@@ -52,7 +80,7 @@ const AccessoryDetailsScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteAccessory(accessory.id);
+              await deleteAccessory(localAccessory.id);
               navigation.goBack();
               showAlert({ title: 'Sucesso', message: 'Acessório excluído com sucesso!', buttons: [{ text: 'OK', onPress: () => { } }] });
             } catch (error) {
@@ -70,8 +98,8 @@ const AccessoryDetailsScreen = () => {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Hero - mesmo layout da ConsoleDetailsScreen */}
         <View style={styles.heroContainer}>
-          {accessory.imageUrl ? (
-            <Image source={{ uri: accessory.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+          {localAccessory.imageUrl ? (
+            <Image source={{ uri: localAccessory.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
           ) : (
             <View style={styles.placeholderHero}>
               <Package size={80} color={ACCESSORY_ACCENT} />
@@ -108,11 +136,11 @@ const AccessoryDetailsScreen = () => {
           </View>
 
           <View style={styles.heroTitleContainer}>
-            <Text style={styles.heroTitleMain}>{accessory.name}</Text>
+            <Text style={styles.heroTitleMain}>{localAccessory.name}</Text>
             <View style={styles.mainBadgeRow}>
               <View style={[styles.solidBadge, { backgroundColor: ACCESSORY_ACCENT }]}>
                 <Package size={12} color="#fff" />
-                <Text style={styles.solidBadgeText}>{accessory.type}</Text>
+                <Text style={styles.solidBadgeText}>{localAccessory.type}</Text>
               </View>
               {consoleName ? (
                 <View style={[styles.solidBadge, { backgroundColor: appColors.console }]}>
@@ -130,20 +158,20 @@ const AccessoryDetailsScreen = () => {
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Investimento</Text>
               <Text style={[styles.summaryValue, { color: '#25d07c' }]}>
-                {showValues ? formatCurrency(accessory.pricePaid) : 'R$ ••••••'}
+                {showValues ? formatCurrency(localAccessory.pricePaid) : 'R$ ••••••'}
               </Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Condição</Text>
               <Text style={[styles.summaryValue, { color: appColors.primary }]}>
-                {accessory.condition || 'N/A'}
+                {localAccessory.condition || 'N/A'}
               </Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Tipo</Text>
-              <Text style={styles.summaryValue}>{accessory.type || 'N/A'}</Text>
+              <Text style={styles.summaryValue}>{localAccessory.type || 'N/A'}</Text>
             </View>
           </View>
         </View>
@@ -160,7 +188,7 @@ const AccessoryDetailsScreen = () => {
                 <Calendar size={18} color={theme.colors.onSurfaceVariant} />
                 <View>
                   <Text style={styles.premiumInfoLabel}>Comprado em</Text>
-                  <Text style={styles.premiumInfoValue}>{formatDate(accessory.purchaseDate)}</Text>
+                  <Text style={styles.premiumInfoValue}>{formatDate(localAccessory.purchaseDate)}</Text>
                 </View>
               </View>
               <View style={styles.premiumInfoCard}>
@@ -171,14 +199,14 @@ const AccessoryDetailsScreen = () => {
                 </View>
               </View>
             </View>
-            {accessory.pricePaid !== undefined && accessory.pricePaid > 0 && (
+            {localAccessory.pricePaid !== undefined && localAccessory.pricePaid > 0 && (
               <View style={styles.premiumPriceCard}>
                 <View style={styles.row}>
                   <ShoppingBag size={20} color="#25d07c" />
                   <Text style={styles.premiumPriceLabel}>Valor de Aquisição</Text>
                 </View>
                 <Text style={[styles.premiumPriceValue, { color: '#25d07c' }]}>
-                  {showValues ? formatCurrency(accessory.pricePaid) : 'R$ ••••••'}
+                  {showValues ? formatCurrency(localAccessory.pricePaid) : 'R$ ••••••'}
                 </Text>
               </View>
             )}
@@ -196,45 +224,45 @@ const AccessoryDetailsScreen = () => {
                 <View>
                   <Text style={styles.premiumInfoLabel}>Última Vez</Text>
                   <Text style={styles.premiumInfoValue}>
-                    {accessory.lastMaintenanceDate ? formatDate(accessory.lastMaintenanceDate) : 'Nunca'}
+                    {localAccessory.lastMaintenanceDate ? formatDate(localAccessory.lastMaintenanceDate) : 'Nunca'}
                   </Text>
                 </View>
               </View>
               <View style={styles.premiumInfoCard}>
                 <AlertTriangle
                   size={18}
-                  color={accessory.nextMaintenanceDate && new Date(accessory.nextMaintenanceDate) < new Date() ? '#ef4444' : theme.colors.onSurfaceVariant}
+                  color={localAccessory.nextMaintenanceDate && new Date(localAccessory.nextMaintenanceDate) < new Date() ? '#ef4444' : theme.colors.onSurfaceVariant}
                 />
                 <View>
                   <Text style={styles.premiumInfoLabel}>Próxima Vez</Text>
                   <Text
                     style={[
                       styles.premiumInfoValue,
-                      accessory.nextMaintenanceDate && new Date(accessory.nextMaintenanceDate) < new Date() && { color: '#ef4444' },
+                      localAccessory.nextMaintenanceDate && new Date(localAccessory.nextMaintenanceDate) < new Date() && { color: '#ef4444' },
                     ]}
                   >
-                    {accessory.nextMaintenanceDate ? formatDate(accessory.nextMaintenanceDate) : 'N/A'}
+                    {localAccessory.nextMaintenanceDate ? formatDate(localAccessory.nextMaintenanceDate) : 'N/A'}
                   </Text>
                 </View>
               </View>
             </View>
-            {accessory.maintenanceDescription ? (
+            {localAccessory.maintenanceDescription ? (
               <View style={styles.maintenanceNotesCard}>
                 <Info size={16} color={theme.colors.onSurfaceVariant} />
-                <Text style={styles.maintenanceNotesText}>{accessory.maintenanceDescription}</Text>
+                <Text style={styles.maintenanceNotesText}>{localAccessory.maintenanceDescription}</Text>
               </View>
             ) : null}
           </View>
 
           {/* Seção: Resumo / História */}
-          {accessory.description ? (
+          {localAccessory.description ? (
             <View style={styles.premiumSection}>
               <View style={styles.sectionTitleRow}>
                 <BookOpen size={20} color={appColors.console} />
                 <Text style={[styles.premiumSectionTitle, { color: appColors.console }]}>Resumo / História</Text>
               </View>
               <View style={styles.descriptionCard}>
-                <Text style={styles.descriptionText}>{accessory.description}</Text>
+                <Text style={styles.descriptionText}>{localAccessory.description}</Text>
               </View>
             </View>
           ) : null}

@@ -1,16 +1,19 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, Animated, Dimensions, TouchableWithoutFeedback, ImageBackground } from 'react-native';
 import { Text, Card, useTheme, IconButton, Button, Portal, Modal, Avatar, Searchbar, Chip, FAB, Divider } from 'react-native-paper';
 import { getGames, getConsoles, getAccessories, getWishlistItems, clearAllData } from '../services/storage';
 import { checkAndNotifyOverdue, getOverdueMaintenanceItems } from '../services/notifications';
 import { SearchItem, Game, Console, Accessory } from '../types';
-import { Search, Menu as MenuIcon, Save, Upload, X, Gamepad, Gamepad2, Disc3, Settings, Eye, Wrench, Calendar, Plus, ChevronRight, LayoutGrid, Heart, Sparkles, Package, DollarSign, AlertTriangle, RefreshCw, Clock, Trash2, TrendingUp, Info } from 'lucide-react-native';
+import { Search, Menu as MenuIcon, Save, Upload, X, Gamepad, Disc3, Settings, Eye, Wrench, Calendar, Plus, ChevronRight, LayoutGrid, Heart, Sparkles, Package, DollarSign, AlertTriangle, RefreshCw, Clock, Trash2, TrendingUp, Info } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { appColors } from '../theme';
 import { appConfig } from '../config/app';
-import { createBackup, restoreBackup, backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
+import { createBackup, restoreBackup } from '../services/backup';
+import { appEvents, APP_EVENTS } from '../services/events';
 import NotificationIcon from '../components/NotificationIcon';
+import { ItemCard } from '../components/ItemCard';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -69,7 +72,7 @@ const HomeScreen = () => {
     totalInvestedAccessories: 0,
     totalInvestedGames: 0,
     totalEstimatedWishlist: 0,
-    recentGames: [] as Game[],
+    recentItems: [] as SearchItem[],
     wishlistItems: [] as SearchItem[],
   });
   const [overdueCount, setOverdueCount] = useState(0);
@@ -92,8 +95,15 @@ const HomeScreen = () => {
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [allItems, setAllItems] = useState<SearchItem[]>([]);
-  const [filteredItems, setFilteredItems] = useState<SearchItem[]>([]);
+
+  // Otimização: Memoizar itens filtrados para evitar processamento pesado durante re-renderizações
+  const filteredItems = useMemo(() => {
+    if (debouncedSearchQuery.trim() === '') return [];
+    const lower = debouncedSearchQuery.toLowerCase();
+    return allItems.filter(item => item.name.toLowerCase().includes(lower));
+  }, [debouncedSearchQuery, allItems]);
 
   // Adicionar listener para o botão de menu na barra de navegação
   useEffect(() => {
@@ -115,14 +125,16 @@ const HomeScreen = () => {
 
   // Adiciona listener para o evento de restauração
   useEffect(() => {
-    const handleRestore = () => {
+    const handleUpdate = () => {
       loadStats();
     };
 
-    backupEventEmitter.on(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+    appEvents.on(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+    appEvents.on(APP_EVENTS.DATA_CHANGED, handleUpdate);
 
     return () => {
-      backupEventEmitter.off(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+      appEvents.off(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+      appEvents.off(APP_EVENTS.DATA_CHANGED, handleUpdate);
     };
   }, []);
 
@@ -200,8 +212,17 @@ const HomeScreen = () => {
         totalEstimatedWishlist,
       });
 
-      // Get last 5 games (recent)
-      const recentGames = [...games].reverse().slice(0, 5);
+      // Get last 5 items globally (recent)
+      const allRecentItems: SearchItem[] = [
+        ...games.map(g => ({ id: g.id, name: g.name, type: 'game' as const, image: g.imageUrl, originalItem: g })),
+        ...consoles.map(c => ({ id: c.id, name: c.name, type: 'console' as const, image: c.imageUrl, originalItem: c })),
+        ...accessories.map(a => ({ id: a.id, name: a.name, type: 'accessory' as const, image: a.imageUrl, originalItem: a })),
+      ];
+
+      // Sort by ID descending (IDs start with timestamp)
+      const recentItems = allRecentItems
+        .sort((a, b) => b.id.localeCompare(a.id))
+        .slice(0, 5);
 
       setStats({
         games: games.length,
@@ -213,7 +234,7 @@ const HomeScreen = () => {
         totalInvestedGames,
         totalEstimatedWishlist,
 
-        recentGames,
+        recentItems,
         wishlistItems: wishlist.map(w => ({ id: w.id, name: w.name, type: w.type, image: w.imageUrl, originalItem: w })),
       });
 
@@ -235,8 +256,13 @@ const HomeScreen = () => {
     }
   };
 
-  // Remover useFocusEffect para evitar múltiplas chamadas
-  // e substituir por um botão de atualização manual
+  // useFocusEffect garante que os dados recarreguem ao voltar para esta tela
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [])
+  );
+
   const handleRefresh = () => {
     setIsLoading(true);
     loadStats().finally(() => {
@@ -327,10 +353,10 @@ const HomeScreen = () => {
   };
 
   const getIconForType = (type: string, color?: string) => {
-    const iconColor = color || '#ffffff';
+    const iconColor = color || getColorForType(type);
     switch (type) {
       case 'game': return <Disc3 size={20} color={iconColor} />;
-      case 'console': return <Gamepad2 size={20} color={iconColor} />;
+      case 'console': return <Gamepad size={20} color={iconColor} />;
       case 'accessory': return <Package size={20} color={iconColor} />;
       default: return <Info size={20} color={iconColor} />;
     }
@@ -603,15 +629,7 @@ const HomeScreen = () => {
         <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
           <Searchbar
             placeholder="Buscar na coleção..."
-            onChangeText={(query) => {
-              setSearchQuery(query);
-              if (query.trim() === '') {
-                setFilteredItems([]);
-              } else {
-                const lower = query.toLowerCase();
-                setFilteredItems(allItems.filter(item => item.name.toLowerCase().includes(lower)));
-              }
-            }}
+            onChangeText={setSearchQuery}
             value={searchQuery}
             style={{
               backgroundColor: theme.colors.surfaceVariant,
@@ -623,12 +641,12 @@ const HomeScreen = () => {
           />
         </View>
 
-        {searchQuery.trim().length > 0 ? (
+        {debouncedSearchQuery.trim().length > 0 ? (
           <View style={{ paddingHorizontal: 24 }}>
             <Text style={{ color: theme.colors.onSurfaceVariant, marginBottom: 12 }}>
               {filteredItems.length} resultados encontrados
             </Text>
-            {filteredItems.map((item) => (
+            {filteredItems.map((item: SearchItem) => (
               <TouchableOpacity
                 key={`${item.type}-${item.id}`}
                 style={{
@@ -825,38 +843,33 @@ const HomeScreen = () => {
                   </View>
                 </View>
 
-                {/* Recent Games Section */}
-                {stats.recentGames.length > 0 && (
+                {/* Recent Items Section */}
+                {stats.recentItems.length > 0 && (
                   <View style={styles.sectionContainer}>
                     <View style={styles.sectionHeader}>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Clock color={appColors.primary} size={18} />
                         <Text style={[styles.sectionTitle, { marginLeft: 8 }]}>Adicionados Recentemente</Text>
                       </View>
-                      <TouchableOpacity onPress={() => navigation.navigate('GamesStack')}>
-                        <Text style={{ color: appColors.primary, fontSize: 14 }}>Ver todos</Text>
-                      </TouchableOpacity>
                     </View>
 
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
-                      {stats.recentGames.map((game, index) => (
-                        <TouchableOpacity
-                          key={game.id}
-                          style={styles.recentGameCard}
-                          onPress={() => navigation.navigate('GameDetails', { game })}
-                        >
-                          {game.imageUrl ? (
-                            <Card.Cover source={{ uri: game.imageUrl }} style={styles.recentGameCover} />
-                          ) : (
-                            <View style={[styles.recentGameCover, { backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' }]}>
-                              <Gamepad color={appColors.primary} size={32} />
-                            </View>
-                          )}
-
-                          <View style={styles.recentGameInfo}>
-                            <Text style={styles.recentGameTitle} numberOfLines={1}>{game.name}</Text>
-                          </View>
-                        </TouchableOpacity>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12, paddingBottom: 8 }}>
+                      {stats.recentItems.map((item, index) => (
+                        <ItemCard
+                          key={item.id}
+                          layout="grid"
+                          title={item.name}
+                          subtitle={item.type.toUpperCase()}
+                          subtitleStyle={{ color: getColorForType(item.type), fontSize: 10, fontWeight: 'bold' }}
+                          imageUri={item.image}
+                          placeholderIcon={getIconForType(item.type, appColors.primary)}
+                          onPress={() => {
+                            if (item.type === 'game') navigation.navigate('GameDetails', { game: item.originalItem });
+                            else if (item.type === 'console') navigation.navigate('ConsoleDetails', { console: item.originalItem });
+                            else if (item.type === 'accessory') navigation.navigate('AccessoryDetails', { accessory: item.originalItem });
+                          }}
+                          style={{ width: 160, margin: 0 }}
+                        />
                       ))}
                     </ScrollView>
                   </View>
@@ -913,17 +926,17 @@ const HomeScreen = () => {
         icon={fabOpen ? 'close' : 'plus'}
         actions={[
           {
-            icon: 'gamepad-variant',
+            icon: ({ size, color }) => <Disc3 size={size} color={color} />,
             label: 'Novo Jogo',
             onPress: () => navigation.navigate('GamesStack', { screen: 'GamesList', params: { autoOpenAdd: true } } as any),
           },
           {
-            icon: 'console',
+            icon: ({ size, color }) => <Gamepad size={size} color={color} />,
             label: 'Novo Console',
             onPress: () => navigation.navigate('ConsolesStack', { screen: 'ConsolesNavigator', params: { autoOpenAdd: true } } as any),
           },
           {
-            icon: 'controller-classic',
+            icon: ({ size, color }) => <Package size={size} color={color} />,
             label: 'Novo Acessório',
             onPress: () => navigation.navigate('Accessories', { autoOpenAdd: true } as any),
           },

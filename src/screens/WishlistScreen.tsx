@@ -3,11 +3,11 @@ import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, ImageBackgrou
 import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, useTheme, Switch, Chip, Card, Avatar } from 'react-native-paper';
 import { getWishlistItems, addWishlistItem, updateWishlistItem, deleteWishlistItem, addGame, addConsole, addAccessory } from '../services/storage';
 import { WishlistItem } from '../types';
-import { Heart, Plus, Edit, Trash2, ChevronDown, Tag, Type, Info, DollarSign, ChevronLeft, Gamepad2, Sparkles, TrendingUp, Package, Disc3, CheckCircle2, ArrowUpCircle } from 'lucide-react-native';
+import { Heart, Plus, Edit, Trash2, ChevronDown, Tag, Type, Info, DollarSign, ChevronLeft, Gamepad, Sparkles, TrendingUp, Package, Disc3, CheckCircle2, ArrowUpCircle } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
 import { ItemCard } from '../components/ItemCard';
-import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
+import { appEvents, APP_EVENTS } from '../services/events';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { MainTabParamList } from '../navigation/types';
@@ -206,14 +206,16 @@ const WishlistScreen = () => {
   }, [searchQuery, activeType, wishlist]);
 
   useEffect(() => {
-    const handleRestore = () => {
+    const handleUpdate = () => {
       loadWishlist();
     };
 
-    backupEventEmitter.on(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+    appEvents.on(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+    appEvents.on(APP_EVENTS.DATA_CHANGED, handleUpdate);
 
     return () => {
-      backupEventEmitter.off(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+      appEvents.off(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+      appEvents.off(APP_EVENTS.DATA_CHANGED, handleUpdate);
     };
   }, []);
 
@@ -257,7 +259,7 @@ const WishlistScreen = () => {
       case 'game':
         return <Disc3 size={20} color={iconColor} />;
       case 'console':
-        return <Gamepad2 size={20} color={iconColor} />;
+        return <Gamepad size={20} color={iconColor} />;
       case 'accessory':
         return <Package size={20} color={iconColor} />;
       default:
@@ -265,7 +267,7 @@ const WishlistScreen = () => {
     }
   };
 
-  const renderItem = ({ item }: { item: WishlistItem }) => (
+  const renderItem = useCallback(({ item }: { item: WishlistItem }) => (
     <View style={styles.cardWrapper}>
       <Card style={[styles.wishCard, { backgroundColor: theme.colors.surface }]}>
         <View style={styles.cardHeader}>
@@ -329,7 +331,7 @@ const WishlistScreen = () => {
         </View>
       </Card>
     </View>
-  );
+  ), [theme, showValues, appColors]);
 
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -428,7 +430,7 @@ const WishlistScreen = () => {
             onPress={() => setActiveType('console')}
             style={styles.filterChip}
             selectedColor={activeType === 'console' ? appColors.console : undefined}
-            icon={() => <Gamepad2 size={16} color={activeType === 'console' ? appColors.console : '#888'} />}
+            icon={() => <Gamepad size={16} color={activeType === 'console' ? appColors.console : '#888'} />}
           >Consoles</Chip>
           <Chip
             selected={activeType === 'accessory'}
@@ -518,33 +520,45 @@ const WishlistScreen = () => {
                 <Type size={18} color={theme.colors.onSurfaceVariant} />
                 <Text style={[commonStyles.label, styles.labelText]}>Tipo</Text>
               </View>
-              <Menu
-                visible={typeMenuVisible}
-                onDismiss={() => setTypeMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    onPress={() => setTypeMenuVisible(true)}
-                    style={[commonStyles.input, styles.menuButton]}
-                  >
-                    <Text style={{ color: theme.colors.onSurface }}>
-                      {TYPE_LABELS[formData.type] || formData.type}
-                    </Text>
-                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                  </TouchableOpacity>
-                }
-              >
-                {TIPOS.map((tipo) => (
-                  <Menu.Item
-                    key={tipo}
-                    onPress={() => {
-                      setFormData({ ...formData, type: tipo as any });
-                      setTypeMenuVisible(false);
-                    }}
-                    title={TYPE_LABELS[tipo] || tipo}
-                    style={styles.menuItem}
-                  />
-                ))}
-              </Menu>
+              {typeMenuVisible ? (
+                <Menu
+                  visible={typeMenuVisible}
+                  onDismiss={() => setTypeMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      onPress={() => setTypeMenuVisible(true)}
+                      style={[commonStyles.input, styles.menuButton]}
+                    >
+                      <Text style={{ color: theme.colors.onSurface }}>
+                        {TYPE_LABELS[formData.type] || formData.type}
+                      </Text>
+                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                    </TouchableOpacity>
+                  }
+                >
+                  {TIPOS.map((tipo) => (
+                    <Menu.Item
+                      key={tipo}
+                      onPress={() => {
+                        setFormData({ ...formData, type: tipo as any });
+                        setTypeMenuVisible(false);
+                      }}
+                      title={TYPE_LABELS[tipo] || tipo}
+                      style={styles.menuItem}
+                    />
+                  ))}
+                </Menu>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setTypeMenuVisible(true)}
+                  style={[commonStyles.input, styles.menuButton]}
+                >
+                  <Text style={{ color: theme.colors.onSurface }}>
+                    {TYPE_LABELS[formData.type] || formData.type}
+                  </Text>
+                  <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={commonStyles.formGroup}>

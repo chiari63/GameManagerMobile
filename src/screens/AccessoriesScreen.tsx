@@ -11,7 +11,7 @@ import { commonStyles } from '../theme/commonStyles';
 import { ItemCard } from '../components/ItemCard';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
+import { appEvents, APP_EVENTS } from '../services/events';
 import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
@@ -109,9 +109,9 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
         setEditingAccessory(editingFromRoute);
         setFormData({
           name: editingFromRoute.name,
-          type: editingFromRoute.type,
-          consoleId: editingFromRoute.consoleId,
-          purchaseDate: editingFromRoute.purchaseDate,
+          type: editingFromRoute.type || '',
+          consoleId: editingFromRoute.consoleId || '',
+          purchaseDate: editingFromRoute.purchaseDate || '',
           lastMaintenanceDate: editingFromRoute.lastMaintenanceDate || '',
           maintenanceDescription: editingFromRoute.maintenanceDescription || '',
           maintenanceInterval: editingFromRoute.maintenanceInterval || 6,
@@ -132,7 +132,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
     const filtered = accessories.filter(accessory => {
       const matchesSearch = !searchQuery ||
         accessory.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        accessory.type.toLowerCase().includes(searchQuery.toLowerCase());
+        (accessory.type && accessory.type.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesType = !filters.type || accessory.type === filters.type;
       const matchesConsole = !filters.consoleId || accessory.consoleId === filters.consoleId;
@@ -151,14 +151,16 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
 
   // Adiciona listener para o evento de restauração
   useEffect(() => {
-    const handleRestore = () => {
+    const handleUpdate = () => {
       loadAccessories();
     };
 
-    backupEventEmitter.on(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+    appEvents.on(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+    appEvents.on(APP_EVENTS.DATA_CHANGED, handleUpdate);
 
     return () => {
-      backupEventEmitter.off(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+      appEvents.off(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+      appEvents.off(APP_EVENTS.DATA_CHANGED, handleUpdate);
     };
   }, []);
 
@@ -170,10 +172,10 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
   }, [navigation]);
 
   const handleAddAccessory = async () => {
-    if (!formData.name || !formData.type) {
+    if (!formData.name || !formData.purchaseDate) {
       showAlert({
-        title: 'Campos obrigatórios',
-        message: 'Por favor, preencha o nome e o tipo do acessório.',
+        title: 'Campo obrigatório',
+        message: 'Por favor, preencha o nome e a data de compra do acessório.',
         buttons: [{ text: 'OK', onPress: () => { } }]
       });
       return;
@@ -215,7 +217,6 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
       setModalVisible(false);
       setEditingAccessory(null);
       loadAccessories();
-      backupEventEmitter.emit(BACKUP_EVENTS.DATA_CHANGED);
     } catch (error) {
       console.error('Erro ao salvar acessório:', error);
       showAlert({
@@ -230,9 +231,9 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
     setEditingAccessory(accessory);
     setFormData({
       name: accessory.name,
-      type: accessory.type,
-      consoleId: accessory.consoleId,
-      purchaseDate: accessory.purchaseDate,
+      type: accessory.type || '',
+      consoleId: accessory.consoleId || '',
+      purchaseDate: accessory.purchaseDate || '',
       lastMaintenanceDate: accessory.lastMaintenanceDate || '',
       maintenanceDescription: accessory.maintenanceDescription || '',
       maintenanceInterval: accessory.maintenanceInterval || 6,
@@ -511,49 +512,58 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
     </Portal>
   );
 
-  const renderItem = ({ item }: { item: Accessory }) => (
+  const renderItem = useCallback(({ item }: { item: Accessory }) => (
     <ItemCard
       layout="grid"
       title={item.name}
-      subtitle={getConsoleName(item.consoleId)}
+      subtitle={getConsoleName(item.consoleId || '')}
       subtitleStyle={{ color: '#f59e0b' }}
       imageUri={item.imageUrl}
-      placeholderIcon={<Gamepad2 size={40} color="#f59e0b" />}
+      placeholderIcon={<Package size={40} color="#f59e0b" />}
       onPress={() => handleViewDetails(item)}
       onLongPress={() => {
         setMenuVisible(item.id);
       }}
       rightElement={
-        <Menu
-          visible={menuVisible === item.id}
-          onDismiss={() => setMenuVisible(null)}
-          anchor={
-            <TouchableOpacity
-              onPress={() => setMenuVisible(item.id)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />
-            </TouchableOpacity>
-          }
-        >
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(null);
-              handleEditAccessory(item);
-            }}
-            title="Editar"
-            leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
-          />
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(null);
-              confirmDelete(item.id);
-            }}
-            title="Excluir"
-            leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
-            titleStyle={{ color: appColors.destructive }}
-          />
-        </Menu>
+        menuVisible === item.id ? (
+          <Menu
+            visible={menuVisible === item.id}
+            onDismiss={() => setMenuVisible(null)}
+            anchor={
+              <TouchableOpacity
+                onPress={() => setMenuVisible(item.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />
+              </TouchableOpacity>
+            }
+          >
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                handleEditAccessory(item);
+              }}
+              title="Editar"
+              leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
+            />
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                confirmDelete(item.id);
+              }}
+              title="Excluir"
+              leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
+              titleStyle={{ color: appColors.destructive }}
+            />
+          </Menu>
+        ) : (
+          <TouchableOpacity
+            onPress={() => setMenuVisible(item.id)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MoreVertical color={theme.colors.onSurfaceVariant} size={20} />
+          </TouchableOpacity>
+        )
       }
       badge={
         <View style={styles.typeBadge}>
@@ -569,12 +579,12 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
         </View>
       }
     />
-  );
+  ), [menuVisible, consoles, theme, showValues]);
 
   const EmptyState = () => (
     <View style={commonStyles.emptyState}>
       <View style={[commonStyles.emptyStateIcon, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
-        <Gamepad2 color="#f59e0b" size={32} />
+        <Package color="#f59e0b" size={32} />
       </View>
       <Text style={commonStyles.emptyStateText}>Nenhum acessório cadastrado</Text>
       <Text style={commonStyles.emptyStateSubtext}>
@@ -631,7 +641,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
               </View>
 
               <View style={commonStyles.formGroup}>
-                <Text style={commonStyles.label}>Nome do Acessório</Text>
+                <Text style={commonStyles.label}>Nome do Acessório *</Text>
                 <TextInput
                   value={formData.name}
                   onChangeText={(text) => setFormData({ ...formData, name: text })}
@@ -677,32 +687,44 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
 
               <View style={commonStyles.formGroup}>
                 <Text style={commonStyles.label}>Console</Text>
-                <Menu
-                  visible={consoleMenuVisible}
-                  onDismiss={() => setConsoleMenuVisible(false)}
-                  anchor={
-                    <TouchableOpacity
-                      onPress={() => setConsoleMenuVisible(true)}
-                      style={[commonStyles.input, styles.menuButton]}
-                    >
-                      <Text style={{ color: theme.colors.onSurface }}>
-                        {formData.consoleId ? getConsoleName(formData.consoleId) : 'Selecione o console'}
-                      </Text>
-                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                    </TouchableOpacity>
-                  }
-                >
-                  {consoles.map((console) => (
-                    <Menu.Item
-                      key={console.id}
-                      onPress={() => {
-                        setFormData({ ...formData, consoleId: console.id });
-                        setConsoleMenuVisible(false);
-                      }}
-                      title={console.name}
-                    />
-                  ))}
-                </Menu>
+                {consoleMenuVisible ? (
+                  <Menu
+                    visible={consoleMenuVisible}
+                    onDismiss={() => setConsoleMenuVisible(false)}
+                    anchor={
+                      <TouchableOpacity
+                        onPress={() => setConsoleMenuVisible(true)}
+                        style={[commonStyles.input, styles.menuButton]}
+                      >
+                        <Text style={{ color: theme.colors.onSurface }}>
+                          {formData.consoleId ? getConsoleName(formData.consoleId) : 'Selecione o console'}
+                        </Text>
+                        <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                      </TouchableOpacity>
+                    }
+                  >
+                    {consoles.map((console) => (
+                      <Menu.Item
+                        key={console.id}
+                        onPress={() => {
+                          setFormData({ ...formData, consoleId: console.id });
+                          setConsoleMenuVisible(false);
+                        }}
+                        title={console.name}
+                      />
+                    ))}
+                  </Menu>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setConsoleMenuVisible(true)}
+                    style={[commonStyles.input, styles.menuButton]}
+                  >
+                    <Text style={{ color: theme.colors.onSurface }}>
+                      {formData.consoleId ? getConsoleName(formData.consoleId) : 'Selecione o console'}
+                    </Text>
+                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={commonStyles.formGroup}>
@@ -729,32 +751,44 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
 
               <View style={commonStyles.formGroup}>
                 <Text style={commonStyles.label}>Condição</Text>
-                <Menu
-                  visible={condicaoMenuVisible}
-                  onDismiss={() => setCondicaoMenuVisible(false)}
-                  anchor={
-                    <TouchableOpacity
-                      onPress={() => setCondicaoMenuVisible(true)}
-                      style={[commonStyles.input, styles.menuButton]}
-                    >
-                      <Text style={{ color: theme.colors.onSurface }}>
-                        {formData.condition || 'Selecione a condição'}
-                      </Text>
-                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                    </TouchableOpacity>
-                  }
-                >
-                  {CONDICOES.map((condition) => (
-                    <Menu.Item
-                      key={condition}
-                      onPress={() => {
-                        setFormData({ ...formData, condition });
-                        setCondicaoMenuVisible(false);
-                      }}
-                      title={condition}
-                    />
-                  ))}
-                </Menu>
+                {condicaoMenuVisible ? (
+                  <Menu
+                    visible={condicaoMenuVisible}
+                    onDismiss={() => setCondicaoMenuVisible(false)}
+                    anchor={
+                      <TouchableOpacity
+                        onPress={() => setCondicaoMenuVisible(true)}
+                        style={[commonStyles.input, styles.menuButton]}
+                      >
+                        <Text style={{ color: theme.colors.onSurface }}>
+                          {formData.condition || 'Selecione a condição'}
+                        </Text>
+                        <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                      </TouchableOpacity>
+                    }
+                  >
+                    {CONDICOES.map((condition) => (
+                      <Menu.Item
+                        key={condition}
+                        onPress={() => {
+                          setFormData({ ...formData, condition });
+                          setCondicaoMenuVisible(false);
+                        }}
+                        title={condition}
+                      />
+                    ))}
+                  </Menu>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setCondicaoMenuVisible(true)}
+                    style={[commonStyles.input, styles.menuButton]}
+                  >
+                    <Text style={{ color: theme.colors.onSurface }}>
+                      {formData.condition || 'Selecione a condição'}
+                    </Text>
+                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={commonStyles.formGroup}>
@@ -775,7 +809,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
               </View>
 
               <DatePicker
-                label="Data de Compra"
+                label="Data de Compra *"
                 value={formData.purchaseDate}
                 onChange={(date) => setFormData({ ...formData, purchaseDate: date })}
                 style={commonStyles.formGroup}

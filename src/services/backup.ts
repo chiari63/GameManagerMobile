@@ -8,34 +8,7 @@ import { STORAGE_KEYS } from '../constants/storage';
 import { rescheduleAllNotifications } from './notifications';
 import { appLog } from '../config/environment';
 
-// Implementação simplificada do EventEmitter
-class EventEmitter {
-  private listeners: { [key: string]: Function[] } = {};
-
-  on(event: string, callback: Function) {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(callback);
-  }
-
-  off(event: string, callback: Function) {
-    if (!this.listeners[event]) return;
-    this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
-  }
-
-  emit(event: string, ...args: any[]) {
-    if (!this.listeners[event]) return;
-    this.listeners[event].forEach(callback => callback(...args));
-  }
-}
-
-// Criando um emitter global para notificar as telas sobre a restauração
-export const backupEventEmitter = new EventEmitter();
-export const BACKUP_EVENTS = {
-  RESTORE_COMPLETED: 'RESTORE_COMPLETED',
-  DATA_CHANGED: 'DATA_CHANGED',
-};
+import { appEvents, APP_EVENTS } from './events';
 
 // Chave do AsyncStorage
 const STORAGE_KEY = '@GameManager:data';
@@ -326,7 +299,7 @@ export const restoreBackup = async () => {
     }
 
     // Emite o evento de restauração completa
-    backupEventEmitter.emit(BACKUP_EVENTS.RESTORE_COMPLETED);
+    appEvents.emit(APP_EVENTS.RESTORE_COMPLETED);
     appLog.info('Evento de restauração emitido');
 
     // Re-agenda todas as notificações após a restauração

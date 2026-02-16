@@ -11,7 +11,7 @@ import { commonStyles } from '../theme/commonStyles';
 import { ItemCard } from '../components/ItemCard';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { backupEventEmitter, BACKUP_EVENTS } from '../services/backup';
+import { appEvents, APP_EVENTS } from '../services/events';
 import { DatePicker } from '../components/DatePicker';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
@@ -25,20 +25,29 @@ import { isValidDate, formatCurrency } from '../utils/formatters';
 const FABRICANTES = [
   'Sony', 'Microsoft', 'Nintendo', 'Sega', 'NEC', 'SNK', 'Atari',
   'Panasonic', '3DO', 'Philips', 'Apple', 'Bandai', 'Commodore',
-  'Fujitsu', 'Magnavox', 'Mattel', 'Sinclair', 'Tectoy', 'Zeebo', 'Outros'
+  'Fujitsu', 'Magnavox', 'Mattel', 'Sinclair', 'Tectoy', 'Zeebo',
+  'CCE', 'Dynacom', 'Gradiente', 'Microdigital', 'Milmar', 'Polyvox', 'Dismac', 'PolyStation', 'Outros'
 ];
 
 // Mapeamento de modelos por fabricante
 const MODELOS_POR_FABRICANTE: Record<string, string[]> = {
-  'Sony': ['PlayStation', 'PlayStation One', 'PS2', 'PS2 Slim', 'PS3', 'PS3 Slim', 'PS3 Super Slim', 'PS4', 'PS4 Slim', 'PS4 Pro', 'PS5', 'PS5 Digital', 'PS5 Slim', 'PSP', 'PS Vita'],
-  'Nintendo': ['NES', 'SNES', 'N64', 'GameCube', 'Wii', 'Wii U', 'Switch', 'Switch Lite', 'Switch OLED', 'Game Boy', 'Game Boy Color', 'GBA', 'GBA SP', 'DS', 'DS Lite', 'DSI', '3DS', '3DS XL', '2DS', 'New 3DS'],
+  'Sony': ['PlayStation', 'PlayStation One', 'PS2', 'PS2 Slim', 'PS3', 'PS3 Slim', 'PS3 Super Slim', 'PS4', 'PS4 Slim', 'PS4 Pro', 'PS5', 'PS5 Digital', 'PS5 Slim', 'PS5 Pro', 'PSP', 'PS Vita', 'PS Portal'],
+  'Nintendo': ['NES', 'SNES', 'N64', 'GameCube', 'Wii', 'Wii U', 'Switch', 'Switch Lite', 'Switch OLED', 'Game Boy', 'Game Boy Color', 'GBA', 'GBA SP', 'Game Boy Micro', 'DS', 'DS Lite', 'DSI', '3DS', '3DS XL', '2DS', 'New 3DS', 'New 2DS XL', 'Virtual Boy', 'Game & Watch'],
   'Microsoft': ['Xbox', 'Xbox 360', 'Xbox 360 S', 'Xbox 360 E', 'Xbox One', 'Xbox One S', 'Xbox One X', 'Xbox Series S', 'Xbox Series X'],
-  'Sega': ['Master System', 'Master System II', 'Master System III', 'Mega Drive', 'Mega Drive II', 'Mega Drive III', 'Sega CD', '32X', 'Saturn', 'Dreamcast', 'Game Gear'],
+  'Sega': ['Master System', 'Master System II', 'Master System III', 'Mega Drive', 'Mega Drive II', 'Mega Drive III', 'Sega CD', '32X', 'Saturn', 'Dreamcast', 'Game Gear', 'SG-1000', 'Nomad'],
   'NEC': ['TurboGrafx-16', 'PC Engine', 'PC Engine Duo', 'TurboExpress'],
-  'SNK': ['Neo Geo AES', 'Neo Geo CD', 'Neo Geo MVS', 'Neo Geo Pocket'],
-  'Atari': ['2600', '5200', '7800', 'Jaguar', 'Lynx'],
-  'Tectoy': ['Master System Evolution', 'Mega Drive 2017', 'Zeebo'],
-  'Outros': ['Console Genérico', 'Retrobox', 'Emulador Hardware'],
+  'SNK': ['Neo Geo AES', 'Neo Geo CD', 'Neo Geo MVS', 'Neo Geo Pocket', 'Neo Geo Pocket Color'],
+  'Atari': ['2600', '5200', '7800', 'Jaguar', 'Lynx', '7800'],
+  'Tectoy': ['Master System Evolution', 'Mega Drive 2017', 'Zeebo', 'Master System Compact', 'Master System Girl', 'Pense Bem'],
+  'CCE': ['Supergame VG-2800', 'Supergame VG-3000', 'Top Game VG-8000', 'Top Game VG-9000', 'Turbo Game'],
+  'Dynacom': ['Dynavision', 'Dynavision II', 'Dynavision III', 'Dynavision IV', 'Dynavision Radical', 'Megavision', 'Handyvision'],
+  'Gradiente': ['Phantom System', 'Atari 2600 (Gradiente)'],
+  'Polyvox': ['Atari 2600 (Polyvox)'],
+  'Microdigital': ['Onyx Jr.'],
+  'Milmar': ['Dactari', 'Hi-Top Game', 'Top System'],
+  'Dismac': ['Bit System'],
+  'PolyStation': ['PolyStation', 'PolyStation 2', 'PolyStation 3'],
+  'Outros': ['Console Genérico', 'Retrobox', 'Emulador Hardware', 'PC Engine', '3DO Real'],
 };
 
 // Lista de regiões disponíveis
@@ -133,7 +142,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
     const filtered = consoles.filter(consoleItem => {
       const matchesSearch = !searchQuery ||
         consoleItem.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        consoleItem.brand.toLowerCase().includes(searchQuery.toLowerCase());
+        (consoleItem.brand && consoleItem.brand.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesBrand = !filters.brand || consoleItem.brand === filters.brand;
       const matchesModel = !filters.model || consoleItem.model === filters.model;
@@ -153,23 +162,25 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
 
   // Adiciona listener para o evento de restauração
   useEffect(() => {
-    const handleRestore = () => {
+    const handleUpdate = () => {
       loadConsoles();
     };
 
-    backupEventEmitter.on(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+    appEvents.on(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+    appEvents.on(APP_EVENTS.DATA_CHANGED, handleUpdate);
 
     return () => {
-      backupEventEmitter.off(BACKUP_EVENTS.RESTORE_COMPLETED, handleRestore);
+      appEvents.off(APP_EVENTS.RESTORE_COMPLETED, handleUpdate);
+      appEvents.off(APP_EVENTS.DATA_CHANGED, handleUpdate);
     };
   }, []);
 
   const handleAddConsole = async () => {
     // Validar campos obrigatórios
-    if (!formData.name || !formData.brand) {
+    if (!formData.name || !formData.purchaseDate) {
       showAlert({
         title: 'Erro',
-        message: 'Por favor, preencha todos os campos obrigatórios.',
+        message: 'Por favor, preencha o nome e a data de compra do console.',
         buttons: [{ text: 'OK', onPress: () => { } }]
       });
       return;
@@ -236,10 +247,10 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
     setEditingConsole(console);
     setFormData({
       name: console.name,
-      brand: console.brand,
-      model: console.model,
+      brand: console.brand || '',
+      model: console.model || '',
       region: console.region || '',
-      purchaseDate: console.purchaseDate,
+      purchaseDate: console.purchaseDate || '',
       lastMaintenanceDate: console.lastMaintenanceDate || '',
       maintenanceDescription: console.maintenanceDescription || '',
       maintenanceInterval: console.maintenanceInterval || 6,
@@ -482,50 +493,59 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
     </Portal>
   );
 
-  const renderItem = ({ item }: { item: Console }) => (
+  const renderItem = useCallback(({ item }: { item: Console }) => (
     <ItemCard
       layout="grid"
       title={item.name}
       subtitle={item.brand}
       subtitleStyle={{ color: appColors.console }}
       imageUri={item.imageUrl}
-      placeholderIcon={<Gamepad2 size={40} color={appColors.console} />}
+      placeholderIcon={<Gamepad size={40} color={appColors.console} />}
       onPress={() => handleViewDetails(item)}
       onLongPress={() => {
         setEditingConsole(item);
         setMenuVisible(item.id);
       }}
       rightElement={
-        <Menu
-          visible={menuVisible === item.id}
-          onDismiss={() => setMenuVisible(null)}
-          anchor={
-            <TouchableOpacity
-              onPress={() => setMenuVisible(item.id)}
-              style={styles.menuIconButton}
-            >
-              <MoreVertical color={theme.colors.onSurfaceVariant} size={18} />
-            </TouchableOpacity>
-          }
-        >
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(null);
-              handleEditConsole(item);
-            }}
-            title="Editar"
-            leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
-          />
-          <Menu.Item
-            onPress={() => {
-              setMenuVisible(null);
-              confirmDelete(item.id);
-            }}
-            title="Excluir"
-            leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
-            titleStyle={{ color: appColors.destructive }}
-          />
-        </Menu>
+        menuVisible === item.id ? (
+          <Menu
+            visible={menuVisible === item.id}
+            onDismiss={() => setMenuVisible(null)}
+            anchor={
+              <TouchableOpacity
+                onPress={() => setMenuVisible(item.id)}
+                style={styles.menuIconButton}
+              >
+                <MoreVertical color={theme.colors.onSurfaceVariant} size={18} />
+              </TouchableOpacity>
+            }
+          >
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                handleEditConsole(item);
+              }}
+              title="Editar"
+              leadingIcon={({ size, color }) => <Edit size={size} color={color} />}
+            />
+            <Menu.Item
+              onPress={() => {
+                setMenuVisible(null);
+                confirmDelete(item.id);
+              }}
+              title="Excluir"
+              leadingIcon={({ size, color }) => <Trash2 size={size} color={appColors.destructive} />}
+              titleStyle={{ color: appColors.destructive }}
+            />
+          </Menu>
+        ) : (
+          <TouchableOpacity
+            onPress={() => setMenuVisible(item.id)}
+            style={styles.menuIconButton}
+          >
+            <MoreVertical color={theme.colors.onSurfaceVariant} size={18} />
+          </TouchableOpacity>
+        )
       }
       badge={
         <View style={styles.typeBadge}>
@@ -541,7 +561,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
         </View>
       }
     />
-  );
+  ), [menuVisible, theme, showValues]);
 
   const EmptyState = () => (
     <View style={commonStyles.emptyState}>
@@ -596,7 +616,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
               </View>
               <View style={[styles.statsBadge, { backgroundColor: appColors.console }]}>
                 <View style={styles.statsIconCircle}>
-                  <Gamepad2 size={16} color="#fff" />
+                  <Gamepad size={16} color="#fff" />
                 </View>
                 <Text style={styles.statsBadgeText}>CONSOLES</Text>
               </View>
@@ -699,7 +719,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
               </View>
 
               <View style={commonStyles.formGroup}>
-                <Text style={commonStyles.label}>Nome do Console</Text>
+                <Text style={commonStyles.label}>Nome do Console *</Text>
                 <TextInput
                   value={formData.name}
                   onChangeText={(text) => setFormData({ ...formData, name: text })}
@@ -712,71 +732,95 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
 
               <View style={commonStyles.formGroup}>
                 <Text style={commonStyles.label}>Fabricante</Text>
-                <Menu
-                  visible={fabricanteMenuVisible}
-                  onDismiss={() => setFabricanteMenuVisible(false)}
-                  anchor={
-                    <TouchableOpacity
-                      onPress={() => setFabricanteMenuVisible(true)}
-                      style={[commonStyles.input, styles.menuButton]}
-                    >
-                      <Text style={{ color: theme.colors.onSurface }}>
-                        {formData.brand || 'Selecione o fabricante'}
-                      </Text>
-                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                    </TouchableOpacity>
-                  }
-                >
-                  <ScrollView style={{ maxHeight: 300 }}>
-                    {FABRICANTES.map((fabricante) => (
-                      <Menu.Item
-                        key={fabricante}
-                        onPress={() => {
-                          setFormData({ ...formData, brand: fabricante, model: '' });
-                          setFabricanteMenuVisible(false);
-                        }}
-                        title={fabricante}
-                      />
-                    ))}
-                  </ScrollView>
-                </Menu>
+                {fabricanteMenuVisible ? (
+                  <Menu
+                    visible={fabricanteMenuVisible}
+                    onDismiss={() => setFabricanteMenuVisible(false)}
+                    anchor={
+                      <TouchableOpacity
+                        onPress={() => setFabricanteMenuVisible(true)}
+                        style={[commonStyles.input, styles.menuButton]}
+                      >
+                        <Text style={{ color: theme.colors.onSurface }}>
+                          {formData.brand || 'Selecione o fabricante'}
+                        </Text>
+                        <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                      </TouchableOpacity>
+                    }
+                  >
+                    <ScrollView style={{ maxHeight: 300 }}>
+                      {FABRICANTES.map((fabricante) => (
+                        <Menu.Item
+                          key={fabricante}
+                          onPress={() => {
+                            setFormData({ ...formData, brand: fabricante, model: '' });
+                            setFabricanteMenuVisible(false);
+                          }}
+                          title={fabricante}
+                        />
+                      ))}
+                    </ScrollView>
+                  </Menu>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setFabricanteMenuVisible(true)}
+                    style={[commonStyles.input, styles.menuButton]}
+                  >
+                    <Text style={{ color: theme.colors.onSurface }}>
+                      {formData.brand || 'Selecione o fabricante'}
+                    </Text>
+                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={commonStyles.formGroup}>
                 <Text style={commonStyles.label}>Modelo</Text>
-                <Menu
-                  visible={modeloMenuVisible}
-                  onDismiss={() => setModeloMenuVisible(false)}
-                  anchor={
-                    <TouchableOpacity
-                      onPress={() => setModeloMenuVisible(true)}
-                      style={[commonStyles.input, styles.menuButton]}
-                    >
-                      <Text style={{ color: theme.colors.onSurface }}>
-                        {formData.model || 'Selecione o modelo'}
-                      </Text>
-                      <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
-                    </TouchableOpacity>
-                  }
-                >
-                  <ScrollView style={{ maxHeight: 300 }}>
-                    {(formData.brand && MODELOS_POR_FABRICANTE[formData.brand] ?
-                      MODELOS_POR_FABRICANTE[formData.brand] :
-                      ['Selecione um fabricante primeiro']).map((modelo) => (
-                        <Menu.Item
-                          key={modelo}
-                          onPress={() => {
-                            if (formData.brand) {
-                              setFormData({ ...formData, model: modelo });
-                            }
-                            setModeloMenuVisible(false);
-                          }}
-                          title={modelo}
-                          disabled={!formData.brand}
-                        />
-                      ))}
-                  </ScrollView>
-                </Menu>
+                {modeloMenuVisible ? (
+                  <Menu
+                    visible={modeloMenuVisible}
+                    onDismiss={() => setModeloMenuVisible(false)}
+                    anchor={
+                      <TouchableOpacity
+                        onPress={() => setModeloMenuVisible(true)}
+                        style={[commonStyles.input, styles.menuButton]}
+                      >
+                        <Text style={{ color: theme.colors.onSurface }}>
+                          {formData.model || 'Selecione o modelo'}
+                        </Text>
+                        <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                      </TouchableOpacity>
+                    }
+                  >
+                    <ScrollView style={{ maxHeight: 300 }}>
+                      {(formData.brand && MODELOS_POR_FABRICANTE[formData.brand] ?
+                        MODELOS_POR_FABRICANTE[formData.brand] :
+                        ['Selecione um fabricante primeiro']).map((modelo) => (
+                          <Menu.Item
+                            key={modelo}
+                            onPress={() => {
+                              if (formData.brand) {
+                                setFormData({ ...formData, model: modelo });
+                              }
+                              setModeloMenuVisible(false);
+                            }}
+                            title={modelo}
+                            disabled={!formData.brand}
+                          />
+                        ))}
+                    </ScrollView>
+                  </Menu>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setModeloMenuVisible(true)}
+                    style={[commonStyles.input, styles.menuButton]}
+                  >
+                    <Text style={{ color: theme.colors.onSurface }}>
+                      {formData.model || 'Selecione o modelo'}
+                    </Text>
+                    <ChevronDown color={theme.colors.onSurfaceVariant} size={20} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={commonStyles.formGroup}>
@@ -886,7 +930,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
 
               <View style={commonStyles.formGroup}>
                 <DatePicker
-                  label="Data de Compra"
+                  label="Data de Compra *"
                   value={formData.purchaseDate}
                   onChange={(date) => setFormData({ ...formData, purchaseDate: date })}
                   style={commonStyles.formGroup}

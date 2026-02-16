@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Game, Console, Accessory, WishlistItem, StorageData } from '../types';
 import { calculateNextMaintenanceDate, scheduleMaintenanceNotification } from './notifications';
 import { appLog } from '../config/environment';
+import { appEvents, APP_EVENTS } from './events';
 
 // Função para gerar ID único
 const generateId = () => {
@@ -76,6 +77,9 @@ export const saveStorageData = async (data: StorageData): Promise<void> => {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     appLog.debug('[Storage] Dados persistidos com sucesso');
+
+    // Notifica que os dados mudaram
+    appEvents.emit(APP_EVENTS.DATA_CHANGED);
   } catch (error) {
     appLog.error('[Storage] Erro crítico ao salvar dados:', error);
     throw new Error('Falha ao salvar no armazenamento local');
@@ -85,7 +89,7 @@ export const saveStorageData = async (data: StorageData): Promise<void> => {
 // Funções para jogos
 export const getGames = async (): Promise<Game[]> => {
   const data = await getStorageData();
-  return data.games || [];
+  return data.games ? [...data.games] : [];
 };
 
 export const addGame = async (gameData: Omit<Game, 'id'>): Promise<Game> => {
@@ -94,29 +98,40 @@ export const addGame = async (gameData: Omit<Game, 'id'>): Promise<Game> => {
   }
   const data = await getStorageData();
   const newGame = { ...gameData, id: generateId() };
-  data.games.push(newGame);
-  await saveStorageData(data);
+
+  const updatedData = {
+    ...data,
+    games: [...(data.games || []), newGame]
+  };
+
+  await saveStorageData(updatedData);
   return newGame;
 };
 
 export const updateGame = async (id: string, gameData: Partial<Game>): Promise<void> => {
   const data = await getStorageData();
-  data.games = data.games.map(game =>
-    game.id === id ? { ...game, ...gameData } : game
-  );
-  await saveStorageData(data);
+  const updatedData = {
+    ...data,
+    games: (data.games || []).map(game =>
+      game.id === id ? { ...game, ...gameData } : game
+    )
+  };
+  await saveStorageData(updatedData);
 };
 
 export const deleteGame = async (id: string): Promise<void> => {
   const data = await getStorageData();
-  data.games = data.games.filter(game => game.id !== id);
-  await saveStorageData(data);
+  const updatedData = {
+    ...data,
+    games: (data.games || []).filter(game => game.id !== id)
+  };
+  await saveStorageData(updatedData);
 };
 
 // Funções para consoles
 export const getConsoles = async (): Promise<Console[]> => {
   const data = await getStorageData();
-  return data.consoles || [];
+  return data.consoles ? [...data.consoles] : [];
 };
 
 export const addConsole = async (consoleData: Omit<Console, 'id'>): Promise<Console> => {
@@ -140,8 +155,12 @@ export const addConsole = async (consoleData: Omit<Console, 'id'>): Promise<Cons
     nextMaintenanceDate
   };
 
-  data.consoles.push(newConsole);
-  await saveStorageData(data);
+  const updatedData = {
+    ...data,
+    consoles: [...(data.consoles || []), newConsole]
+  };
+
+  await saveStorageData(updatedData);
 
   // Agendar notificação se necessário
   if (newConsole.notifyMaintenance && newConsole.nextMaintenanceDate) {
@@ -187,11 +206,14 @@ export const updateConsole = async (id: string, consoleData: Partial<Console>): 
     nextMaintenanceDate
   };
 
-  data.consoles = data.consoles.map(consoleItem =>
-    consoleItem.id === id ? updatedConsole : consoleItem
-  );
+  const updatedData = {
+    ...data,
+    consoles: (data.consoles || []).map(consoleItem =>
+      consoleItem.id === id ? updatedConsole : consoleItem
+    )
+  };
 
-  await saveStorageData(data);
+  await saveStorageData(updatedData);
 
   // Atualizar notificação se necessário
   if (updatedConsole.notifyMaintenance && updatedConsole.nextMaintenanceDate) {
@@ -206,14 +228,17 @@ export const updateConsole = async (id: string, consoleData: Partial<Console>): 
 
 export const deleteConsole = async (id: string): Promise<void> => {
   const data = await getStorageData();
-  data.consoles = data.consoles.filter(consoleItem => consoleItem.id !== id);
-  await saveStorageData(data);
+  const updatedData = {
+    ...data,
+    consoles: (data.consoles || []).filter(consoleItem => consoleItem.id !== id)
+  };
+  await saveStorageData(updatedData);
 };
 
 // Funções para acessórios
 export const getAccessories = async (): Promise<Accessory[]> => {
   const data = await getStorageData();
-  return data.accessories || [];
+  return data.accessories ? [...data.accessories] : [];
 };
 
 export const addAccessory = async (accessoryData: Omit<Accessory, 'id'>): Promise<Accessory> => {
@@ -237,8 +262,12 @@ export const addAccessory = async (accessoryData: Omit<Accessory, 'id'>): Promis
     nextMaintenanceDate
   };
 
-  data.accessories.push(newAccessory);
-  await saveStorageData(data);
+  const updatedData = {
+    ...data,
+    accessories: [...(data.accessories || []), newAccessory]
+  };
+
+  await saveStorageData(updatedData);
 
   // Agendar notificação se necessário
   if (newAccessory.notifyMaintenance && newAccessory.nextMaintenanceDate) {
@@ -284,11 +313,14 @@ export const updateAccessory = async (id: string, accessoryData: Partial<Accesso
     nextMaintenanceDate
   };
 
-  data.accessories = data.accessories.map(accessory =>
-    accessory.id === id ? updatedAccessory : accessory
-  );
+  const updatedData = {
+    ...data,
+    accessories: (data.accessories || []).map(accessory =>
+      accessory.id === id ? updatedAccessory : accessory
+    )
+  };
 
-  await saveStorageData(data);
+  await saveStorageData(updatedData);
 
   // Atualizar notificação se necessário
   if (updatedAccessory.notifyMaintenance && updatedAccessory.nextMaintenanceDate) {
@@ -303,36 +335,48 @@ export const updateAccessory = async (id: string, accessoryData: Partial<Accesso
 
 export const deleteAccessory = async (id: string): Promise<void> => {
   const data = await getStorageData();
-  data.accessories = data.accessories.filter(accessory => accessory.id !== id);
-  await saveStorageData(data);
+  const updatedData = {
+    ...data,
+    accessories: (data.accessories || []).filter(accessory => accessory.id !== id)
+  };
+  await saveStorageData(updatedData);
 };
 
 // Funções para lista de desejos
 export const getWishlistItems = async (): Promise<WishlistItem[]> => {
   const data = await getStorageData();
-  return data.wishlist || [];
+  return data.wishlist ? [...data.wishlist] : [];
 };
 
 export const addWishlistItem = async (itemData: Omit<WishlistItem, 'id'>): Promise<WishlistItem> => {
   const data = await getStorageData();
   const newItem = { ...itemData, id: generateId() };
-  data.wishlist.push(newItem);
-  await saveStorageData(data);
+  const updatedData = {
+    ...data,
+    wishlist: [...(data.wishlist || []), newItem]
+  };
+  await saveStorageData(updatedData);
   return newItem;
 };
 
 export const updateWishlistItem = async (id: string, itemData: Partial<WishlistItem>): Promise<void> => {
   const data = await getStorageData();
-  data.wishlist = data.wishlist.map(item =>
-    item.id === id ? { ...item, ...itemData } : item
-  );
-  await saveStorageData(data);
+  const updatedData = {
+    ...data,
+    wishlist: (data.wishlist || []).map(item =>
+      item.id === id ? { ...item, ...itemData } : item
+    )
+  };
+  await saveStorageData(updatedData);
 };
 
 export const deleteWishlistItem = async (id: string): Promise<void> => {
   const data = await getStorageData();
-  data.wishlist = data.wishlist.filter(item => item.id !== id);
-  await saveStorageData(data);
+  const updatedData = {
+    ...data,
+    wishlist: (data.wishlist || []).filter(item => item.id !== id)
+  };
+  await saveStorageData(updatedData);
 };
 
 /**
