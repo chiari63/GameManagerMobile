@@ -257,7 +257,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
       notifyMaintenance: console.notifyMaintenance !== undefined ? console.notifyMaintenance : true,
       imageUrl: console.imageUrl || '',
       condition: console.condition || '',
-      pricePaid: console.pricePaid ? console.pricePaid.toString() : '',
+      pricePaid: (console.pricePaid !== undefined && console.pricePaid !== null) ? console.pricePaid.toString() : '',
       description: console.description || '',
     });
     setModalVisible(true);

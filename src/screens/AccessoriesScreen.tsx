@@ -240,7 +240,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
       notifyMaintenance: accessory.notifyMaintenance !== undefined ? accessory.notifyMaintenance : true,
       imageUrl: accessory.imageUrl || '',
       condition: accessory.condition || '',
-      pricePaid: accessory.pricePaid ? accessory.pricePaid.toString() : '',
+      pricePaid: (accessory.pricePaid !== undefined && accessory.pricePaid !== null) ? accessory.pricePaid.toString() : '',
       description: accessory.description || '',
     });
     setModalVisible(true);

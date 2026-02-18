@@ -71,7 +71,7 @@ const WishlistScreen = () => {
       type: item.type,
       description: item.description || '',
       priority: item.priority || 'média',
-      estimatedPrice: item.estimatedPrice?.toString() || '',
+      estimatedPrice: (item.estimatedPrice !== undefined && item.estimatedPrice !== null) ? item.estimatedPrice.toString() : '',
     });
     setModalVisible(true);
   };

@@ -63,6 +63,13 @@ const GameDetailsScreen = () => {
     loadData();
   }, [loadData]);
 
+  // Sincronizar dados do IGDB salvos localmente
+  useEffect(() => {
+    if (localGame && localGame.igdbData) {
+      setIgdbDetails(localGame.igdbData);
+    }
+  }, [localGame]);
+
   useEffect(() => {
     const handleUpdate = () => {
       loadData();

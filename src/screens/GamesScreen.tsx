@@ -235,7 +235,7 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
       imageUrl: game.imageUrl || '',
       igdbId: game.igdbId,
       igdbData: game.igdbData, // Carregar dados completos do IGDB
-      pricePaid: game.pricePaid ? game.pricePaid.toString() : '',
+      pricePaid: (game.pricePaid !== undefined && game.pricePaid !== null) ? game.pricePaid.toString() : '',
     });
     setModalVisible(true);
     setMenuVisible(null);
