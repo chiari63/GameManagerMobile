@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Calendar, Gamepad, Gamepad2, Package, Wrench, ShoppingBag, BookOpen, MoreVertical, Edit, Trash2, AlertTriangle, Info, ArrowLeft } from 'lucide-react-native';
 import { getConsoles } from '../services/storage';
 import darkTheme, { appColors } from '../theme';
@@ -11,14 +12,16 @@ import { Menu } from 'react-native-paper';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { getAccessories } from '../services/storage';
+import type { Accessory } from '../types';
+import type { RootStackParamList } from '../navigation/types';
 
 // Cor de destaque para acessórios (mesmo padrão da listagem)
 const ACCESSORY_ACCENT = '#f59e0b';
 
 const AccessoryDetailsScreen = () => {
-  const route = useRoute();
-  const navigation = useNavigation();
-  const { accessory } = route.params as { accessory: any };
+  const route = useRoute<RouteProp<RootStackParamList, 'AccessoryDetails'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { accessory } = route.params;
   const [localAccessory, setLocalAccessory] = useState(accessory);
   const theme = darkTheme;
   const { showValues } = useValuesVisibility();
@@ -65,7 +68,7 @@ const AccessoryDetailsScreen = () => {
 
   const handleEditAccessory = () => {
     setMenuVisible(false);
-    (navigation as any).navigate('Accessories', { editingAccessory: accessory });
+    navigation.navigate('Accessories', { editingAccessory: localAccessory });
   };
 
   const handleDeleteAccessory = () => {

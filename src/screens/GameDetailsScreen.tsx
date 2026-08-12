@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Divider, Menu, Portal, Modal, Button, TextInput } from 'react-native-paper';
 import {
   Calendar, Tag, Gamepad, Bookmark, Star, ArrowLeft, ExternalLink, Monitor,
@@ -13,16 +14,19 @@ import darkTheme, { appColors } from '../theme';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import { commonStyles } from '../theme/commonStyles';
 import { formatDate, formatCurrency } from '../utils/formatters';
+import { isSafeExternalUrl } from '../utils/urlSecurity';
 import { translateText } from '../services/translate';
 import { Alert } from 'react-native';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { getGames } from '../services/storage';
+import type { Game } from '../types';
+import type { RootStackParamList } from '../navigation/types';
 
 
 const GameDetailsScreen = () => {
-  const route = useRoute();
-  const navigation = useNavigation();
-  const { game } = route.params as { game: any };
+  const route = useRoute<RouteProp<RootStackParamList, 'GameDetails'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { game } = route.params;
   const [localGame, setLocalGame] = useState(game);
   const { showValues } = useValuesVisibility();
   const theme = darkTheme;
@@ -97,6 +101,11 @@ const GameDetailsScreen = () => {
   };
 
   const openWebsite = (url: string) => {
+    if (!isSafeExternalUrl(url)) {
+      Alert.alert('Link inválido', 'Este link não pode ser aberto com segurança.');
+      return;
+    }
+
     Linking.openURL(url).catch(err => console.error('Erro ao abrir URL:', err));
   };
 
@@ -130,8 +139,7 @@ const GameDetailsScreen = () => {
   };
 
   const handleEditGame = () => {
-    // @ts-ignore
-    navigation.navigate('GamesList', { editingGame: localGame });
+    navigation.navigate('MainTabs', { screen: 'GamesStack', params: { screen: 'GamesList', params: { editingGame: localGame } } });
   };
 
   const handleDeleteGame = () => {

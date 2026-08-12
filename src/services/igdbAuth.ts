@@ -3,7 +3,6 @@ import { igdbConfig } from '../config/igdbConfig';
 import { STORAGE_KEYS } from '../constants/storage';
 import { appLog } from '../config/environment';
 import { getSecureValue, saveSecureValue, deleteSecureValue } from '../utils/securityUtils';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Chaves para armazenamento do token
 const IGDB_TOKEN_KEY = STORAGE_KEYS.IGDB_ACCESS_TOKEN;
@@ -27,8 +26,8 @@ export const getIGDBToken = async (): Promise<string> => {
   appLog.info('getIGDBToken - Iniciando obtenção de token');
   try {
     // Verificar se já temos um token armazenado
-    const storedToken = await AsyncStorage.getItem(IGDB_TOKEN_KEY);
-    const storedExpiry = await AsyncStorage.getItem(IGDB_TOKEN_EXPIRY_KEY);
+    const storedToken = await getSecureValue(IGDB_TOKEN_KEY);
+    const storedExpiry = await getSecureValue(IGDB_TOKEN_EXPIRY_KEY);
     
     appLog.debug('getIGDBToken - Token armazenado:', storedToken ? `${storedToken.substring(0, 10)}...` : 'Não');
     appLog.debug('getIGDBToken - Data de expiração armazenada:', storedExpiry || 'Não');
@@ -90,8 +89,8 @@ export const getIGDBToken = async (): Promise<string> => {
     appLog.debug('getIGDBToken - Nova data de expiração:', expiryDate.toISOString());
     
     // Armazenar o token e sua data de expiração
-    await AsyncStorage.setItem(IGDB_TOKEN_KEY, access_token);
-    await AsyncStorage.setItem(IGDB_TOKEN_EXPIRY_KEY, expiryDate.toISOString());
+    await saveSecureValue(IGDB_TOKEN_KEY, access_token);
+    await saveSecureValue(IGDB_TOKEN_EXPIRY_KEY, expiryDate.toISOString());
     appLog.info('getIGDBToken - Token armazenado com sucesso');
     
     return access_token;
@@ -119,8 +118,8 @@ export const getIGDBToken = async (): Promise<string> => {
  * Limpa o token armazenado, forçando a obtenção de um novo na próxima requisição
  */
 export const clearIGDBToken = async (): Promise<void> => {
-  await AsyncStorage.removeItem(IGDB_TOKEN_KEY);
-  await AsyncStorage.removeItem(IGDB_TOKEN_EXPIRY_KEY);
+  await deleteSecureValue(IGDB_TOKEN_KEY);
+  await deleteSecureValue(IGDB_TOKEN_EXPIRY_KEY);
   appLog.info('clearIGDBToken - Token IGDB removido');
 };
 

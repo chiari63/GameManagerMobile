@@ -1,4 +1,5 @@
-import { Game, Console, Accessory } from '../types';
+import type { NavigatorScreenParams } from '@react-navigation/native';
+import type { Game, Console, Accessory } from '../types';
 
 // Definição dos tipos para as pilhas de navegação
 export type HomeStackParamList = {
@@ -12,32 +13,27 @@ export type HomeStackParamList = {
 };
 
 export type MainTabParamList = {
-  ConsolesStack: undefined;
-  GamesStack: undefined;
-  HomeStack: undefined;
+  ConsolesStack: NavigatorScreenParams<ConsolesStackParamList> | undefined;
+  GamesStack: NavigatorScreenParams<GamesStackParamList> | undefined;
+  HomeStack: NavigatorScreenParams<HomeStackParamList> | undefined;
   Wishlist: undefined;
-  MainTabs: undefined;
-  GameDetails: { game: Game };
-  ConsoleDetails: { console: Console };
-  AccessoryDetails: { accessory: Accessory };
-  IGDBSearch: { onSelect: (gameData: any) => void; searchType: string };
 };
 
 export type RootStackParamList = {
   Onboarding: undefined;
-  MainTabs: undefined;
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   Games: undefined;
-  GameDetails: { id: string };
+  GameDetails: { game: Game };
   Consoles: undefined;
-  ConsoleDetails: { id: string };
-  Accessories: { autoOpenAdd?: boolean; editingAccessory?: Accessory };
-  AccessoryDetails: { id: string };
+  ConsoleDetails: { console: Console };
+  Accessories: { autoOpenAdd?: boolean; editingAccessory?: Accessory } | undefined;
+  AccessoryDetails: { accessory: Accessory };
   Maintenance: undefined;
   Notifications: undefined;
   ApisConfig: undefined;
   ApiConfig: undefined;
   IGDBSearch: {
-    onSelect: (data: any) => void;
+    onSelect: (data: unknown) => void;
     searchType: 'game' | 'platform';
   };
 };

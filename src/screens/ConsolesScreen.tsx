@@ -3,7 +3,7 @@ import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Image, Platfo
 import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
 import { getConsoles, addConsole, updateConsole, deleteConsole } from '../services/storage';
 import { Console } from '../types';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell, Search, TrendingUp, Gamepad2, Info, ShoppingBag, Tag, ShieldCheck, FileText, Layout } from 'lucide-react-native';
 import { View as RNView, ImageBackground } from 'react-native';
 import { appColors } from '../theme';
@@ -13,12 +13,12 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { DatePicker } from '../components/DatePicker';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import { ConsolesStackParamList, MainTabParamList } from '../navigation/types';
-import type { RouteProp } from '@react-navigation/native';
 import { isValidDate, formatCurrency } from '../utils/formatters';
 
 // Lista de fabricantes expandida
@@ -56,10 +56,7 @@ const REGIOES = ['Americano (NTSC-U)', 'Japonês (NTSC-J)', 'Brasileiro (PAL-M)'
 // Condições para colecionadores
 const CONDICOES = ['Novo', 'Lacrado', 'Completo (CIB)', 'Bom estado', 'Loose (Apenas Console)', 'Para restauração', 'Com caixa (S/ Manual)'];
 
-type ConsolesScreenProps = {
-  navigation: BottomTabNavigationProp<MainTabParamList>;
-  route: RouteProp<ConsolesStackParamList, 'ConsolesList'>;
-};
+type ConsolesScreenProps = NativeStackScreenProps<ConsolesStackParamList, 'ConsolesList'>;
 
 const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
   const theme = useTheme();
@@ -127,12 +124,12 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
       if (route.params?.autoOpenAdd) {
         setModalVisible(true);
         // Limpar o parâmetro para não abrir novamente ao voltar
-        navigation.setParams({ autoOpenAdd: undefined } as any);
+        navigation.setParams({ autoOpenAdd: undefined });
       }
       if (route.params?.editingConsole) {
         handleEditConsole(route.params.editingConsole);
         // Limpar o parâmetro
-        navigation.setParams({ editingConsole: undefined } as any);
+        navigation.setParams({ editingConsole: undefined });
       }
     }, [route.params?.autoOpenAdd, route.params?.editingConsole])
   );
@@ -580,7 +577,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
     navigation.setOptions({
       headerLeft: () => (
         <TouchableOpacity
-          onPress={() => navigation.navigate('HomeStack')}
+          onPress={() => navigation.getParent<BottomTabNavigationProp<MainTabParamList>>()?.navigate('HomeStack', undefined)}
           style={{ marginLeft: 8 }}
         >
           <ChevronLeft color={theme.colors.onSurface} size={24} />

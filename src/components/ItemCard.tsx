@@ -135,6 +135,8 @@ export const ItemCard = React.memo<ItemCardProps>(({
     );
 });
 
+ItemCard.displayName = 'ItemCard';
+
 const styles = StyleSheet.create({
     container: {
         marginBottom: 12,

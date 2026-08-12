@@ -3,8 +3,8 @@ import { View, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-nat
 import { Text, TextInput, Button, useTheme, Card, ActivityIndicator, Divider } from 'react-native-paper';
 import { ChevronLeft, Save, Key, Shield, Info, CheckCircle2, XCircle } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
 import axios from 'axios';
 import { appColors } from '../theme';
 import { useAlert } from '../contexts/AlertContext';
@@ -17,15 +17,15 @@ import {
   deleteIGDBCredentials, 
   clearIGDBToken 
 } from '../services/igdbAuth';
-import { isSecureStoreAvailable } from '../utils/securityUtils';
+import { getSecureValue, isSecureStoreAvailable, saveSecureValue } from '../utils/securityUtils';
 
-// Referências às chaves no AsyncStorage
+// Referências às chaves de armazenamento seguro
 const API_CLIENT_ID_KEY = STORAGE_KEYS.IGDB_CLIENT_ID;
 const API_CLIENT_SECRET_KEY = STORAGE_KEYS.IGDB_CLIENT_SECRET;
 const API_ACCESS_TOKEN_KEY = STORAGE_KEYS.IGDB_ACCESS_TOKEN;
 const API_TOKEN_EXPIRY_KEY = STORAGE_KEYS.IGDB_TOKEN_EXPIRY;
 
-type ApiConfigScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ApiConfig'>;
+type ApiConfigScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ApiConfig'>;
 
 const ApiConfigScreen: React.FC = () => {
   const navigation = useNavigation<ApiConfigScreenNavigationProp>();
@@ -61,9 +61,8 @@ const ApiConfigScreen: React.FC = () => {
         if (credentials.clientId) setClientId(credentials.clientId);
         if (credentials.clientSecret) setClientSecret(credentials.clientSecret);
         
-        // Carregar informações do token (ainda armazenadas no AsyncStorage)
-        const savedAccessToken = await AsyncStorage.getItem(API_ACCESS_TOKEN_KEY);
-        const savedTokenExpiry = await AsyncStorage.getItem(API_TOKEN_EXPIRY_KEY);
+        const savedAccessToken = await getSecureValue(API_ACCESS_TOKEN_KEY);
+        const savedTokenExpiry = await getSecureValue(API_TOKEN_EXPIRY_KEY);
         
         if (savedAccessToken) setAccessToken(savedAccessToken);
         if (savedTokenExpiry) setTokenExpiry(savedTokenExpiry);
@@ -149,8 +148,8 @@ const ApiConfigScreen: React.FC = () => {
       const credentials = await getIGDBCredentials();
       
       // Obter informações do token
-      const storedToken = await AsyncStorage.getItem(API_ACCESS_TOKEN_KEY);
-      const storedExpiry = await AsyncStorage.getItem(API_TOKEN_EXPIRY_KEY);
+      const storedToken = await getSecureValue(API_ACCESS_TOKEN_KEY);
+      const storedExpiry = await getSecureValue(API_TOKEN_EXPIRY_KEY);
       
       // Criar mensagem de depuração
       const debugMessage = `
@@ -226,8 +225,8 @@ const ApiConfigScreen: React.FC = () => {
         expiryDate.setSeconds(expiryDate.getSeconds() + expiresIn);
         
         // Salvar token e data de expiração
-        await AsyncStorage.setItem(API_ACCESS_TOKEN_KEY, data.access_token);
-        await AsyncStorage.setItem(API_TOKEN_EXPIRY_KEY, expiryDate.toISOString());
+        await saveSecureValue(API_ACCESS_TOKEN_KEY, data.access_token);
+        await saveSecureValue(API_TOKEN_EXPIRY_KEY, expiryDate.toISOString());
         
         setAccessToken(data.access_token);
         setTokenExpiry(expiryDate.toISOString());

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
-import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Divider, FAB, Portal, Modal, Button, TextInput, Menu, Switch } from 'react-native-paper';
 import { Calendar, Tag, Gamepad, ExternalLink, Wrench, ShoppingBag, DollarSign, Plus, X, Image as ImageIcon, ChevronDown, Bell, MoreVertical, Edit, Trash2, Upload, Info, TrendingUp, AlertTriangle, ChevronLeft, BookOpen, ArrowLeft, Package } from 'lucide-react-native';
 import { getPlatformDetails } from '../services/igdbApi';
@@ -9,6 +10,8 @@ import { ItemCard } from '../components/ItemCard';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import { getAccessories, addAccessory, updateAccessory, deleteAccessory } from '../services/storage';
 import { Accessory } from '../types';
+
+import type { RootStackParamList } from '../navigation/types';
 import { DatePicker } from '../components/DatePicker';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -17,13 +20,14 @@ import { requestNotificationPermissions } from '../services/notifications';
 import { commonStyles } from '../theme/commonStyles';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { formatDate, formatCurrency } from '../utils/formatters';
+import { isSafeExternalUrl } from '../utils/urlSecurity';
 
 const TIPOS = ['Controles', 'Cabos', 'Memorycards', 'Outros'];
 
 const ConsoleDetailsScreen = () => {
-  const route = useRoute();
-  const navigation = useNavigation();
-  const { console } = route.params as { console: any };
+  const route = useRoute<RouteProp<RootStackParamList, 'ConsoleDetails'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { console } = route.params;
   const theme = darkTheme;
   const { showValues } = useValuesVisibility();
   const { showAlert } = useAlert();
@@ -60,7 +64,7 @@ const ConsoleDetailsScreen = () => {
           const details = await getPlatformDetails(console.igdbId);
           setIgdbDetails(details);
         } catch (error) {
-          console.error('Erro ao buscar detalhes do IGDB:', error);
+          globalThis.console.error('Erro ao buscar detalhes do IGDB:', error);
         } finally {
           setLoading(false);
         }
@@ -76,7 +80,7 @@ const ConsoleDetailsScreen = () => {
       const consoleAccessories = allAccessories.filter(acc => acc.consoleId === console.id);
       setAccessories(consoleAccessories);
     } catch (error) {
-      console.error('Erro ao carregar acessórios:', error);
+      globalThis.console.error('Erro ao carregar acessórios:', error);
     }
   }, [console.id]);
 
@@ -100,7 +104,16 @@ const ConsoleDetailsScreen = () => {
 
 
   const openWebsite = (url: string) => {
-    Linking.openURL(url).catch(err => console.error('Erro ao abrir URL:', err));
+    if (!isSafeExternalUrl(url)) {
+      showAlert({
+        title: 'Link inválido',
+        message: 'Este link não pode ser aberto com segurança.',
+        buttons: [{ text: 'OK', onPress: () => {} }],
+      });
+      return;
+    }
+
+    Linking.openURL(url).catch(err => globalThis.console.error('Erro ao abrir URL:', err));
   };
 
   const getWebsiteLabel = (category: number) => {
@@ -170,14 +183,13 @@ const ConsoleDetailsScreen = () => {
       setEditingAccessory(null);
       loadAccessories();
     } catch (error) {
-      console.error('Erro ao salvar acessório:', error);
+      globalThis.console.error('Erro ao salvar acessório:', error);
       showAlert({ title: 'Erro', message: 'Não foi possível salvar o acessório.', buttons: [{ text: 'OK', onPress: () => { } }] });
     }
   };
 
   const handleEditConsole = () => {
-    // @ts-ignore
-    navigation.navigate('ConsolesList', { editingConsole: console });
+    navigation.navigate('MainTabs', { screen: 'ConsolesStack', params: { screen: 'ConsolesList', params: { editingConsole: console } } });
   };
 
   const handleDeleteConsole = () => {
@@ -196,7 +208,7 @@ const ConsoleDetailsScreen = () => {
               navigation.goBack();
               showAlert({ title: 'Sucesso', message: 'Console excluído com sucesso!', buttons: [{ text: 'OK', onPress: () => { } }] });
             } catch (error) {
-              console.error('Erro ao excluir console:', error);
+              globalThis.console.error('Erro ao excluir console:', error);
             }
           }
         }
@@ -228,7 +240,7 @@ const ConsoleDetailsScreen = () => {
       showAlert({ title: 'Sucesso', message: 'Acessório excluído com sucesso!', buttons: [{ text: 'OK', onPress: () => { } }] });
       loadAccessories();
     } catch (error) {
-      console.error('Erro ao excluir acessório:', error);
+      globalThis.console.error('Erro ao excluir acessório:', error);
       showAlert({ title: 'Erro', message: 'Não foi possível excluir o acessório.', buttons: [{ text: 'OK', onPress: () => { } }] });
     }
     setMenuVisible(null);
@@ -254,7 +266,6 @@ const ConsoleDetailsScreen = () => {
       imageUri={item.imageUrl}
       placeholderIcon={<Package size={40} color="#f59e0b" />}
       onPress={() => {
-        // @ts-ignore
         navigation.navigate('AccessoryDetails', { accessory: item });
       }}
       onLongPress={() => setMenuVisible(item.id)}

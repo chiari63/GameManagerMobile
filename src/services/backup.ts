@@ -2,13 +2,15 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getConsoles, getGames, getAccessories, getWishlistItems, clearMemoryCache } from './storage';
+import { getConsoles, getGames, getAccessories, getWishlistItems, restoreStorageData } from './storage';
 import { StorageData } from '../types';
 import { STORAGE_KEYS } from '../constants/storage';
 import { rescheduleAllNotifications } from './notifications';
 import { appLog } from '../config/environment';
-
 import { appEvents, APP_EVENTS } from './events';
+import { validateBackupData } from './backupSchema';
+
+const MAX_BACKUP_FILE_SIZE_BYTES = 15_000_000;
 
 // Chave do AsyncStorage
 const STORAGE_KEY = '@GameManager:data';
@@ -60,11 +62,22 @@ const base64ToImage = async (base64: string, itemId: string = 'default'): Promis
   }
 };
 
-// Função para processar imagens dos itens
-const processItemsWithImages = async (items: any[]): Promise<any[]> => {
+// Mantém URLs HTTPS remotas e converte somente arquivos locais em base64.
+export const prepareBackupItems = async (items: any[]): Promise<any[]> => {
   const processedItems = [];
 
   for (const item of items) {
+    if (typeof item.imageUrl === 'string' && item.imageUrl.startsWith('https://')) {
+      processedItems.push({ ...item });
+      continue;
+    }
+
+    if (typeof item.imageUrl === 'string' && item.imageUrl.startsWith('http://')) {
+      const { imageUrl, ...itemWithoutUnsafeUrl } = item;
+      processedItems.push(itemWithoutUnsafeUrl);
+      continue;
+    }
+
     if (item.imageUrl) {
       try {
         const base64Image = await imageToBase64(item.imageUrl);
@@ -80,31 +93,15 @@ const processItemsWithImages = async (items: any[]): Promise<any[]> => {
         appLog.error(`Erro ao processar imagem para o item ${item.id}:`, error);
       }
     }
-    // Se não tiver imagem ou ocorrer erro, adiciona o item sem modificações
-    processedItems.push({ ...item, imageUrl: undefined });
+    // Não descarta uma referência que não tenha podido ser convertida.
+    processedItems.push({ ...item });
   }
 
   return processedItems;
 };
 
-// Função para restaurar imagens dos itens
-const restoreItemsWithImages = async (items: any[]): Promise<any[]> => {
-  // Primeiro, limpar qualquer imagem antiga que possa estar no diretório
-  try {
-    if (!FileSystem.documentDirectory) {
-      appLog.error('Diretório de documentos não disponível');
-    } else {
-      const files = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
-      const imageFiles = files.filter(file => file.endsWith('.jpg'));
-
-      appLog.debug(`Encontradas ${imageFiles.length} imagens antigas para limpar`);
-
-      // Não vamos excluir as imagens antigas ainda, apenas registrar que existem
-    }
-  } catch (error) {
-    appLog.error('Erro ao listar diretório de imagens:', error);
-  }
-
+// Materializa imagens locais e preserva URLs HTTPS validadas.
+export const restoreBackupItems = async (items: any[]): Promise<any[]> => {
   const restoredItems = [];
 
   for (const item of items) {
@@ -124,8 +121,9 @@ const restoreItemsWithImages = async (items: any[]): Promise<any[]> => {
         appLog.error(`Erro ao restaurar imagem para o item ${item.id}:`, error);
       }
     }
-    // Se não tiver imagem em base64 ou ocorrer erro, adiciona o item sem imagem
-    restoredItems.push({ ...item, imageBase64: undefined, imageUrl: undefined });
+    // Sem base64, a URL remota já validada permanece intacta.
+    const { imageBase64, ...itemWithoutBase64 } = item;
+    restoredItems.push(itemWithoutBase64);
   }
 
   return restoredItems;
@@ -161,10 +159,10 @@ export const createBackup = async () => {
       processedAccessories,
       processedWishlist
     ] = await Promise.all([
-      processItemsWithImages(consoles),
-      processItemsWithImages(games),
-      processItemsWithImages(accessories),
-      processItemsWithImages(wishlist)
+      prepareBackupItems(consoles),
+      prepareBackupItems(games),
+      prepareBackupItems(accessories),
+      prepareBackupItems(wishlist)
     ]);
 
     // Cria o objeto de backup
@@ -223,12 +221,15 @@ export const restoreBackup = async () => {
     if (!result.assets || result.assets.length === 0 || !result.assets[0].uri) {
       throw new Error('Arquivo de backup inválido ou não selecionado');
     }
+    if (typeof result.assets[0].size === 'number' && result.assets[0].size > MAX_BACKUP_FILE_SIZE_BYTES) {
+      throw new Error('Arquivo de backup excede o tamanho permitido');
+    }
 
     appLog.info('Arquivo de backup selecionado:', result.assets[0].uri);
 
     // Lê o conteúdo do arquivo
     const fileContent = await FileSystem.readAsStringAsync(result.assets[0].uri);
-    const backupData = JSON.parse(fileContent);
+    const backupData = validateBackupData(JSON.parse(fileContent));
 
     appLog.info('Dados do backup:', {
       consoles: backupData.consoles?.length || 0,
@@ -252,32 +253,22 @@ export const restoreBackup = async () => {
       throw new Error('Arquivo de backup com estrutura inválida');
     }
 
-    // Restaura as imagens de cada coleção
-    const [
-      restoredConsoles,
-      restoredGames,
-      restoredAccessories,
-      restoredWishlist
-    ] = await Promise.all([
-      restoreItemsWithImages(backupData.consoles),
-      restoreItemsWithImages(backupData.games),
-      restoreItemsWithImages(backupData.accessories),
-      restoreItemsWithImages(backupData.wishlist)
-    ]);
+    let restoredConsoles: StorageData['consoles'] = [];
+    let restoredAccessories: StorageData['accessories'] = [];
 
-    // Prepara os dados para restauração
-    const storageData: StorageData = {
-      consoles: restoredConsoles,
-      games: restoredGames,
-      accessories: restoredAccessories,
-      wishlist: restoredWishlist
-    };
-
-    // Restaura os dados usando a mesma chave do storage
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(storageData));
-
-    // Limpa o cache de memória para garantir que os novos dados sejam carregados
-    clearMemoryCache();
+    // A materialização de imagens e a substituição dos dados compartilham a mesma fila
+    // das demais mutações, evitando que uma gravação concorrente seja perdida.
+    await restoreStorageData(async () => {
+      const [consoles, games, accessories, wishlist] = await Promise.all([
+        restoreBackupItems(backupData.consoles),
+        restoreBackupItems(backupData.games),
+        restoreBackupItems(backupData.accessories),
+        restoreBackupItems(backupData.wishlist),
+      ]);
+      restoredConsoles = consoles;
+      restoredAccessories = accessories;
+      return { consoles, games, accessories, wishlist } as StorageData;
+    });
 
     // Verifica se os dados foram salvos corretamente
     const restoredData = await AsyncStorage.getItem(STORAGE_KEY);

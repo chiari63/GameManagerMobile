@@ -1,50 +1,75 @@
-# Welcome to your Expo app 👋
+# Game Manager Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicativo Expo/React Native para catalogar jogos, consoles, acessórios e lista de desejos, com integração opcional ao IGDB e lembretes locais de manutenção.
 
-## Get started
+## Requisitos
 
-1. Install dependencies
+- Node.js LTS e npm
+- Ambiente Expo SDK 54
+- Android Emulator/Android Studio ou dispositivo físico para os testes manuais
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-    npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Instalação e execução
 
 ```bash
-npm run reset-project
+npm ci
+npm start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Atalhos:
 
-## Learn more
+```bash
+npm run android
+npm run ios
+npm run web
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+> Notificações remotas do `expo-notifications` não funcionam no Expo Go a partir do SDK 53. Para validar notificações no Android, use um development build ou uma build instalada no dispositivo.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Verificação de qualidade
 
-## Join the community
+```bash
+npm run typecheck
+npm run lint
+npm test -- --runInBand
+npx expo-doctor
+npx expo export --platform android --output-dir dist-android
+```
 
-Join our community of developers creating universal apps.
+O lint é informativo durante a limpeza do legado: não há erros bloqueantes, mas avisos devem ser corrigidos gradualmente e revisados antes de novas alterações funcionais.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Segurança e dados
+
+- Credenciais e tokens do IGDB ficam somente no dispositivo, usando `expo-secure-store`.
+- Credenciais não entram nos backups nem devem ser registradas em logs.
+- URLs externas provenientes de metadados remotos aceitam exclusivamente `https:`.
+- O backup Android automático está desativado (`allowBackup: false`) para reduzir a exposição de dados locais. O app mantém seu fluxo explícito de exportação/importação.
+- Backups importados passam por validação de schema antes de qualquer gravação.
+
+## Backup e restauração
+
+Use o fluxo de backup dentro do aplicativo para exportar e importar a coleção. Antes de importar uma versão para uso real, valide:
+
+1. backup com imagens locais e URLs remotas;
+2. rejeição de JSON malformado;
+3. rejeição de URLs externas inseguras;
+4. rejeição de arquivos, coleções ou payloads de imagem além dos limites aceitos;
+5. restauração sem sobrescrever dados quando a validação falhar.
+
+## IGDB
+
+A integração exige credenciais válidas configuradas no aplicativo. Elas são locais ao dispositivo. A busca escapa termos externos, limita consultas e distingue ausência de resultado de falhas de rede/autenticação.
+
+## Checklist de aceitação Android
+
+Antes de publicar uma build de teste:
+
+- configure credenciais IGDB válidas e confirme que não aparecem em AsyncStorage;
+- pesquise jogos com texto normal e com aspas;
+- tente importar JSON inválido e URL não-HTTPS;
+- crie, desative, edite e exclua lembretes de manutenção;
+- abra a Home repetidamente com manutenção atrasada e confirme um único alerta diário;
+- faça duas gravações rápidas e confirme que ambas persistem.
+
+## Limitações conhecidas
+
+`npm audit --omit=dev` ainda reporta vulnerabilidades transitivas da cadeia Expo SDK 54/Metro/Jest. O Axios direto já está atualizado. A correção integral indicada pelo npm requer migração major para Expo SDK 57; não execute `npm audit fix --force` sem uma migração dedicada, testes em dispositivo e revisão das mudanças nativas.

@@ -22,7 +22,7 @@
       },
       "package": "com.lucaschiari.GameManagerMobile",
       "permissions": [],
-      "allowBackup": true,
+      "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan",
       "jsEngine": "hermes",
       "intentFilters": [
@@ -50,7 +50,8 @@
           "image": "./assets/controle-de-video-game.png",
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "assetBundlePatterns": [
       "**/*"

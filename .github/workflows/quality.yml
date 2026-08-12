@@ -1,0 +1,49 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - fix/**
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- --runInBand
+      - run: npx expo-doctor
+      - name: Export Android JavaScript bundle
+        run: npx expo export --platform android --output-dir dist-android
+      - name: Upload Android export
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-export
+          path: dist-android
+          if-no-files-found: error
+
+  audit:
+    name: Dependency audit report
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
