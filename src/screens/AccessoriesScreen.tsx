@@ -595,7 +595,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
         data={filteredAccessories}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         contentContainerStyle={[
           styles.listContentContainer,
           filteredAccessories.length === 0 && { flex: 1 }

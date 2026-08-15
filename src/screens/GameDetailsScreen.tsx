@@ -21,6 +21,7 @@ import { appEvents, APP_EVENTS } from '../services/events';
 import { getGames } from '../services/storage';
 import type { Game } from '../types';
 import type { RootStackParamList } from '../navigation/types';
+import { ImagePreviewModal } from '../components/ImagePreviewModal';
 
 
 const GameDetailsScreen = () => {
@@ -41,6 +42,7 @@ const GameDetailsScreen = () => {
   const [translating, setTranslating] = useState(false);
   const [usingLocalData, setUsingLocalData] = useState(false);
   const [gameMenuVisible, setGameMenuVisible] = useState(false);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'media'>('info');
 
   const loadData = useCallback(async () => {
@@ -170,13 +172,21 @@ const GameDetailsScreen = () => {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroContainer}>
           {localGame.imageUrl ? (
-            <Image source={{ uri: localGame.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            <TouchableOpacity
+              style={styles.heroImageFull}
+              accessibilityRole="button"
+              accessibilityLabel="Ampliar imagem do jogo"
+              activeOpacity={0.92}
+              onPress={() => setImagePreviewVisible(true)}
+            >
+              <Image source={{ uri: localGame.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            </TouchableOpacity>
           ) : (
             <View style={styles.placeholderHero}>
               <Disc3 size={80} color={appColors.primary} />
             </View>
           )}
-          <View style={styles.heroGradient} />
+          <View pointerEvents="none" style={styles.heroGradient} />
 
           {/* Floating Action Buttons over Hero */}
           <View style={styles.heroActions}>
@@ -463,6 +473,12 @@ const GameDetailsScreen = () => {
           ) : null}
         </View>
       </ScrollView>
+      <ImagePreviewModal
+        visible={imagePreviewVisible}
+        imageUri={localGame.imageUrl}
+        onDismiss={() => setImagePreviewVisible(false)}
+        accessibilityLabel={`Imagem ampliada do jogo ${localGame.name}`}
+      />
     </View>
   );
 };

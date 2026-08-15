@@ -633,7 +633,7 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.listContentContainer, filteredGames.length === 0 && { flex: 1 }]}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         ListEmptyComponent={EmptyState}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}

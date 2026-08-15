@@ -14,6 +14,7 @@ import { appEvents, APP_EVENTS } from '../services/events';
 import { getAccessories } from '../services/storage';
 import type { Accessory } from '../types';
 import type { RootStackParamList } from '../navigation/types';
+import { ImagePreviewModal } from '../components/ImagePreviewModal';
 
 // Cor de destaque para acessórios (mesmo padrão da listagem)
 const ACCESSORY_ACCENT = '#f59e0b';
@@ -28,6 +29,7 @@ const AccessoryDetailsScreen = () => {
   const { showAlert } = useAlert();
   const [consoleName, setConsoleName] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -102,13 +104,21 @@ const AccessoryDetailsScreen = () => {
         {/* Hero - mesmo layout da ConsoleDetailsScreen */}
         <View style={styles.heroContainer}>
           {localAccessory.imageUrl ? (
-            <Image source={{ uri: localAccessory.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            <TouchableOpacity
+              style={styles.heroImageFull}
+              accessibilityRole="button"
+              accessibilityLabel="Ampliar imagem do acessório"
+              activeOpacity={0.92}
+              onPress={() => setImagePreviewVisible(true)}
+            >
+              <Image source={{ uri: localAccessory.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            </TouchableOpacity>
           ) : (
             <View style={styles.placeholderHero}>
               <Package size={80} color={ACCESSORY_ACCENT} />
             </View>
           )}
-          <View style={styles.heroGradient} />
+          <View pointerEvents="none" style={styles.heroGradient} />
 
           <View style={styles.heroActions}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.heroActionButton}>
@@ -271,6 +281,12 @@ const AccessoryDetailsScreen = () => {
           ) : null}
         </View>
       </ScrollView>
+      <ImagePreviewModal
+        visible={imagePreviewVisible}
+        imageUri={localAccessory.imageUrl}
+        onDismiss={() => setImagePreviewVisible(false)}
+        accessibilityLabel={`Imagem ampliada do acessório ${localAccessory.name}`}
+      />
     </View>
   );
 };

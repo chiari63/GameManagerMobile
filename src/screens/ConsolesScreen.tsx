@@ -20,35 +20,10 @@ import { useAlert } from '../contexts/AlertContext';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import { ConsolesStackParamList, MainTabParamList } from '../navigation/types';
 import { isValidDate, formatCurrency } from '../utils/formatters';
-
-// Lista de fabricantes expandida
-const FABRICANTES = [
-  'Sony', 'Microsoft', 'Nintendo', 'Sega', 'NEC', 'SNK', 'Atari',
-  'Panasonic', '3DO', 'Philips', 'Apple', 'Bandai', 'Commodore',
-  'Fujitsu', 'Magnavox', 'Mattel', 'Sinclair', 'Tectoy', 'Zeebo',
-  'CCE', 'Dynacom', 'Gradiente', 'Microdigital', 'Milmar', 'Polyvox', 'Dismac', 'PolyStation', 'Outros'
-];
-
-// Mapeamento de modelos por fabricante
-const MODELOS_POR_FABRICANTE: Record<string, string[]> = {
-  'Sony': ['PlayStation', 'PlayStation One', 'PS2', 'PS2 Slim', 'PS3', 'PS3 Slim', 'PS3 Super Slim', 'PS4', 'PS4 Slim', 'PS4 Pro', 'PS5', 'PS5 Digital', 'PS5 Slim', 'PS5 Pro', 'PSP', 'PS Vita', 'PS Portal'],
-  'Nintendo': ['NES', 'SNES', 'N64', 'GameCube', 'Wii', 'Wii U', 'Switch', 'Switch Lite', 'Switch OLED', 'Game Boy', 'Game Boy Color', 'GBA', 'GBA SP', 'Game Boy Micro', 'DS', 'DS Lite', 'DSI', '3DS', '3DS XL', '2DS', 'New 3DS', 'New 2DS XL', 'Virtual Boy', 'Game & Watch'],
-  'Microsoft': ['Xbox', 'Xbox 360', 'Xbox 360 S', 'Xbox 360 E', 'Xbox One', 'Xbox One S', 'Xbox One X', 'Xbox Series S', 'Xbox Series X'],
-  'Sega': ['Master System', 'Master System II', 'Master System III', 'Mega Drive', 'Mega Drive II', 'Mega Drive III', 'Sega CD', '32X', 'Saturn', 'Dreamcast', 'Game Gear', 'SG-1000', 'Nomad'],
-  'NEC': ['TurboGrafx-16', 'PC Engine', 'PC Engine Duo', 'TurboExpress'],
-  'SNK': ['Neo Geo AES', 'Neo Geo CD', 'Neo Geo MVS', 'Neo Geo Pocket', 'Neo Geo Pocket Color'],
-  'Atari': ['2600', '5200', '7800', 'Jaguar', 'Lynx', '7800'],
-  'Tectoy': ['Master System Evolution', 'Mega Drive 2017', 'Zeebo', 'Master System Compact', 'Master System Girl', 'Pense Bem'],
-  'CCE': ['Supergame VG-2800', 'Supergame VG-3000', 'Top Game VG-8000', 'Top Game VG-9000', 'Turbo Game'],
-  'Dynacom': ['Dynavision', 'Dynavision II', 'Dynavision III', 'Dynavision IV', 'Dynavision Radical', 'Megavision', 'Handyvision'],
-  'Gradiente': ['Phantom System', 'Atari 2600 (Gradiente)'],
-  'Polyvox': ['Atari 2600 (Polyvox)'],
-  'Microdigital': ['Onyx Jr.'],
-  'Milmar': ['Dactari', 'Hi-Top Game', 'Top System'],
-  'Dismac': ['Bit System'],
-  'PolyStation': ['PolyStation', 'PolyStation 2', 'PolyStation 3'],
-  'Outros': ['Console Genérico', 'Retrobox', 'Emulador Hardware', 'PC Engine', '3DO Real'],
-};
+import {
+  CONSOLE_BRANDS as FABRICANTES,
+  CONSOLE_MODELS_BY_BRAND as MODELOS_POR_FABRICANTE,
+} from '../data/consoleCatalog';
 
 // Lista de regiões disponíveis
 const REGIOES = ['Americano (NTSC-U)', 'Japonês (NTSC-J)', 'Brasileiro (PAL-M)', 'Europeu (PAL)', 'Livre (Region Free)'];
@@ -683,7 +658,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContentContainer}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         ListEmptyComponent={EmptyState}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}

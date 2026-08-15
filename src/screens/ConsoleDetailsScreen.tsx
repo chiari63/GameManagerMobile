@@ -21,6 +21,7 @@ import { commonStyles } from '../theme/commonStyles';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { isSafeExternalUrl } from '../utils/urlSecurity';
+import { ImagePreviewModal } from '../components/ImagePreviewModal';
 
 const TIPOS = ['Controles', 'Cabos', 'Memorycards', 'Outros'];
 
@@ -42,6 +43,7 @@ const ConsoleDetailsScreen = () => {
   const [condicaoMenuVisible, setCondicaoMenuVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'accessories'>('info');
   const [consoleMenuVisible, setConsoleMenuVisible] = useState(false);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -308,13 +310,21 @@ const ConsoleDetailsScreen = () => {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroContainer}>
           {console.imageUrl ? (
-            <Image source={{ uri: console.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            <TouchableOpacity
+              style={styles.heroImageFull}
+              accessibilityRole="button"
+              accessibilityLabel="Ampliar imagem do console"
+              activeOpacity={0.92}
+              onPress={() => setImagePreviewVisible(true)}
+            >
+              <Image source={{ uri: console.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            </TouchableOpacity>
           ) : (
             <View style={styles.placeholderHero}>
               <Gamepad size={80} color={appColors.primary} />
             </View>
           )}
-          <View style={styles.heroGradient} />
+          <View pointerEvents="none" style={styles.heroGradient} />
 
           {/* Floating Action Buttons over Hero */}
           <View style={styles.heroActions}>
@@ -705,6 +715,12 @@ const ConsoleDetailsScreen = () => {
           </ScrollView>
         </Modal>
       </Portal>
+      <ImagePreviewModal
+        visible={imagePreviewVisible}
+        imageUri={console.imageUrl}
+        onDismiss={() => setImagePreviewVisible(false)}
+        accessibilityLabel={`Imagem ampliada do console ${console.name}`}
+      />
     </View>
   );
 };
