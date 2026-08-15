@@ -3,7 +3,7 @@ import { View, StyleSheet, FlatList, Alert, ScrollView, TouchableOpacity, Image,
 import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Switch, useTheme } from 'react-native-paper';
 import { getAccessories, addAccessory, updateAccessory, deleteAccessory, getConsoles } from '../services/storage';
 import { Accessory, Console } from '../types';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Gamepad2, Plus, X, Image as ImageIcon, Calendar, MoreVertical, ChevronDown, Settings, Upload, SlidersHorizontal, ChevronLeft, Bell, Edit, Trash2, Search, Info, Package, Tag, ShieldCheck, Layout, TrendingUp } from 'lucide-react-native';
 import { View as RNView, ImageBackground } from 'react-native';
 import { appColors } from '../theme';
@@ -13,12 +13,11 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { DatePicker } from '../components/DatePicker';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
-import type { RouteProp } from '@react-navigation/native';
 
 // Lista de tipos de acessórios disponíveis
 const TIPOS = ['Controles', 'Cabos', 'Memorycards', 'Outros'];
@@ -32,10 +31,7 @@ const CONDICOES = [
   'Para restauro'
 ];
 
-type AccessoriesScreenProps = {
-  navigation: BottomTabNavigationProp<MainTabParamList>;
-  route: RouteProp<RootStackParamList, 'Accessories'>;
-};
+type AccessoriesScreenProps = NativeStackScreenProps<RootStackParamList, 'Accessories'>;
 
 const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
   const theme = useTheme();
@@ -102,9 +98,9 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
     useCallback(() => {
       if (route.params?.autoOpenAdd) {
         setModalVisible(true);
-        navigation.setParams({ autoOpenAdd: undefined } as any);
+        navigation.setParams({ autoOpenAdd: undefined });
       }
-      const editingFromRoute = (route.params as any)?.editingAccessory as Accessory | undefined;
+      const editingFromRoute = route.params?.editingAccessory;
       if (editingFromRoute) {
         setEditingAccessory(editingFromRoute);
         setFormData({
@@ -122,7 +118,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
           description: editingFromRoute.description || '',
         });
         setModalVisible(true);
-        navigation.setParams({ editingAccessory: undefined } as any);
+        navigation.setParams({ editingAccessory: undefined });
       }
     }, [route.params])
   );
@@ -599,7 +595,7 @@ const AccessoriesScreen = ({ navigation, route }: AccessoriesScreenProps) => {
         data={filteredAccessories}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         contentContainerStyle={[
           styles.listContentContainer,
           filteredAccessories.length === 0 && { flex: 1 }

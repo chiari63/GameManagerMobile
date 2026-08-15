@@ -61,6 +61,7 @@ export interface Console {
   condition?: string;
   pricePaid?: number;
   description?: string;
+  igdbId?: number;
 }
 
 export interface Accessory {

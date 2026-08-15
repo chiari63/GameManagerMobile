@@ -3,7 +3,7 @@ import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Image, Platfo
 import { Text, FAB, Searchbar, IconButton, Button, TextInput, Portal, Modal, Menu, Divider, List, useTheme, Switch } from 'react-native-paper';
 import { getConsoles, addConsole, updateConsole, deleteConsole } from '../services/storage';
 import { Console } from '../types';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Gamepad, Plus, X, Image as ImageIcon, Calendar, Edit, Trash2, ChevronDown, Settings, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Bell, Search, TrendingUp, Gamepad2, Info, ShoppingBag, Tag, ShieldCheck, FileText, Layout } from 'lucide-react-native';
 import { View as RNView, ImageBackground } from 'react-native';
 import { appColors } from '../theme';
@@ -13,42 +13,17 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { DatePicker } from '../components/DatePicker';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { requestNotificationPermissions } from '../services/notifications';
 import { useAlert } from '../contexts/AlertContext';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import { ConsolesStackParamList, MainTabParamList } from '../navigation/types';
-import type { RouteProp } from '@react-navigation/native';
 import { isValidDate, formatCurrency } from '../utils/formatters';
-
-// Lista de fabricantes expandida
-const FABRICANTES = [
-  'Sony', 'Microsoft', 'Nintendo', 'Sega', 'NEC', 'SNK', 'Atari',
-  'Panasonic', '3DO', 'Philips', 'Apple', 'Bandai', 'Commodore',
-  'Fujitsu', 'Magnavox', 'Mattel', 'Sinclair', 'Tectoy', 'Zeebo',
-  'CCE', 'Dynacom', 'Gradiente', 'Microdigital', 'Milmar', 'Polyvox', 'Dismac', 'PolyStation', 'Outros'
-];
-
-// Mapeamento de modelos por fabricante
-const MODELOS_POR_FABRICANTE: Record<string, string[]> = {
-  'Sony': ['PlayStation', 'PlayStation One', 'PS2', 'PS2 Slim', 'PS3', 'PS3 Slim', 'PS3 Super Slim', 'PS4', 'PS4 Slim', 'PS4 Pro', 'PS5', 'PS5 Digital', 'PS5 Slim', 'PS5 Pro', 'PSP', 'PS Vita', 'PS Portal'],
-  'Nintendo': ['NES', 'SNES', 'N64', 'GameCube', 'Wii', 'Wii U', 'Switch', 'Switch Lite', 'Switch OLED', 'Game Boy', 'Game Boy Color', 'GBA', 'GBA SP', 'Game Boy Micro', 'DS', 'DS Lite', 'DSI', '3DS', '3DS XL', '2DS', 'New 3DS', 'New 2DS XL', 'Virtual Boy', 'Game & Watch'],
-  'Microsoft': ['Xbox', 'Xbox 360', 'Xbox 360 S', 'Xbox 360 E', 'Xbox One', 'Xbox One S', 'Xbox One X', 'Xbox Series S', 'Xbox Series X'],
-  'Sega': ['Master System', 'Master System II', 'Master System III', 'Mega Drive', 'Mega Drive II', 'Mega Drive III', 'Sega CD', '32X', 'Saturn', 'Dreamcast', 'Game Gear', 'SG-1000', 'Nomad'],
-  'NEC': ['TurboGrafx-16', 'PC Engine', 'PC Engine Duo', 'TurboExpress'],
-  'SNK': ['Neo Geo AES', 'Neo Geo CD', 'Neo Geo MVS', 'Neo Geo Pocket', 'Neo Geo Pocket Color'],
-  'Atari': ['2600', '5200', '7800', 'Jaguar', 'Lynx', '7800'],
-  'Tectoy': ['Master System Evolution', 'Mega Drive 2017', 'Zeebo', 'Master System Compact', 'Master System Girl', 'Pense Bem'],
-  'CCE': ['Supergame VG-2800', 'Supergame VG-3000', 'Top Game VG-8000', 'Top Game VG-9000', 'Turbo Game'],
-  'Dynacom': ['Dynavision', 'Dynavision II', 'Dynavision III', 'Dynavision IV', 'Dynavision Radical', 'Megavision', 'Handyvision'],
-  'Gradiente': ['Phantom System', 'Atari 2600 (Gradiente)'],
-  'Polyvox': ['Atari 2600 (Polyvox)'],
-  'Microdigital': ['Onyx Jr.'],
-  'Milmar': ['Dactari', 'Hi-Top Game', 'Top System'],
-  'Dismac': ['Bit System'],
-  'PolyStation': ['PolyStation', 'PolyStation 2', 'PolyStation 3'],
-  'Outros': ['Console Genérico', 'Retrobox', 'Emulador Hardware', 'PC Engine', '3DO Real'],
-};
+import {
+  CONSOLE_BRANDS as FABRICANTES,
+  CONSOLE_MODELS_BY_BRAND as MODELOS_POR_FABRICANTE,
+} from '../data/consoleCatalog';
 
 // Lista de regiões disponíveis
 const REGIOES = ['Americano (NTSC-U)', 'Japonês (NTSC-J)', 'Brasileiro (PAL-M)', 'Europeu (PAL)', 'Livre (Region Free)'];
@@ -56,10 +31,7 @@ const REGIOES = ['Americano (NTSC-U)', 'Japonês (NTSC-J)', 'Brasileiro (PAL-M)'
 // Condições para colecionadores
 const CONDICOES = ['Novo', 'Lacrado', 'Completo (CIB)', 'Bom estado', 'Loose (Apenas Console)', 'Para restauração', 'Com caixa (S/ Manual)'];
 
-type ConsolesScreenProps = {
-  navigation: BottomTabNavigationProp<MainTabParamList>;
-  route: RouteProp<ConsolesStackParamList, 'ConsolesList'>;
-};
+type ConsolesScreenProps = NativeStackScreenProps<ConsolesStackParamList, 'ConsolesList'>;
 
 const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
   const theme = useTheme();
@@ -127,12 +99,12 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
       if (route.params?.autoOpenAdd) {
         setModalVisible(true);
         // Limpar o parâmetro para não abrir novamente ao voltar
-        navigation.setParams({ autoOpenAdd: undefined } as any);
+        navigation.setParams({ autoOpenAdd: undefined });
       }
       if (route.params?.editingConsole) {
         handleEditConsole(route.params.editingConsole);
         // Limpar o parâmetro
-        navigation.setParams({ editingConsole: undefined } as any);
+        navigation.setParams({ editingConsole: undefined });
       }
     }, [route.params?.autoOpenAdd, route.params?.editingConsole])
   );
@@ -580,7 +552,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
     navigation.setOptions({
       headerLeft: () => (
         <TouchableOpacity
-          onPress={() => navigation.navigate('HomeStack')}
+          onPress={() => navigation.getParent<BottomTabNavigationProp<MainTabParamList>>()?.navigate('HomeStack', undefined)}
           style={{ marginLeft: 8 }}
         >
           <ChevronLeft color={theme.colors.onSurface} size={24} />
@@ -686,7 +658,7 @@ const ConsolesScreen = ({ navigation, route }: ConsolesScreenProps) => {
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContentContainer}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         ListEmptyComponent={EmptyState}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}

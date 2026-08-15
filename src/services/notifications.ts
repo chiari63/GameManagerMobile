@@ -7,6 +7,20 @@ import { appLog } from '../config/environment';
 
 // Chave para armazenar o histórico de notificações
 const NOTIFICATIONS_HISTORY_KEY = '@GameManager:notifications';
+const OVERDUE_NUDGE_KEY = '@GameManager:overdue-nudge';
+let overdueNudgeQueue: Promise<void> = Promise.resolve();
+
+const enqueueOverdueNudge = (operation: () => Promise<void>): Promise<void> => {
+  const result = overdueNudgeQueue.then(operation, operation);
+  overdueNudgeQueue = result.then(() => undefined, () => undefined);
+  return result;
+};
+
+const localDateKey = (date: Date): string => {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+};
 
 // Configuração do handler de notificações
 Notifications.setNotificationHandler({
@@ -225,7 +239,7 @@ export const checkAndNotifyOverdue = async (
   accessories: Accessory[]
 ): Promise<void> => {
   try {
-    const overdueItems: string[] = [];
+    const overdueItems: Array<{ id: string; type: 'console' | 'accessory'; name: string }> = [];
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
@@ -235,7 +249,7 @@ export const checkAndNotifyOverdue = async (
         const nextDate = parseBrazilianDate(c.nextMaintenanceDate);
         nextDate.setHours(0, 0, 0, 0);
         if (nextDate < now) {
-          overdueItems.push(c.name);
+          overdueItems.push({ id: c.id, type: 'console', name: c.name });
         }
       }
     });
@@ -246,31 +260,31 @@ export const checkAndNotifyOverdue = async (
         const nextDate = parseBrazilianDate(a.nextMaintenanceDate);
         nextDate.setHours(0, 0, 0, 0);
         if (nextDate < now) {
-          overdueItems.push(a.name);
+          overdueItems.push({ id: a.id, type: 'accessory', name: a.name });
         }
       }
     });
 
-    if (overdueItems.length > 0) {
+    if (overdueItems.length === 0) return;
+
+    const itemIds = overdueItems.map(item => `${item.type}:${item.id}`).sort();
+    const date = localDateKey(now);
+    const dedupeKey = `${date}:${itemIds.join(',')}`;
+    await enqueueOverdueNudge(async () => {
+      const previous = await AsyncStorage.getItem(OVERDUE_NUDGE_KEY);
+      if (previous === dedupeKey) return;
+
       appLog.info(`Encontrados ${overdueItems.length} itens com manutenção atrasada. Enviando notificação local...`);
-
-      const title = overdueItems.length === 1
-        ? 'Manutenção Atrasada'
-        : 'Múltiplas Manutenções Atrasadas';
-
+      const title = overdueItems.length === 1 ? 'Manutenção Atrasada' : 'Múltiplas Manutenções Atrasadas';
       const body = overdueItems.length === 1
-        ? `A manutenção de ${overdueItems[0]} está atrasada. Realize-a o quanto antes!`
+        ? `A manutenção de ${overdueItems[0].name} está atrasada. Realize-a o quanto antes!`
         : `Você tem ${overdueItems.length} itens com manutenção atrasada. Confira sua coleção!`;
-
       await Notifications.scheduleNotificationAsync({
-        content: {
-          title,
-          body,
-          data: { type: 'overdue_nudge_summary' },
-        },
-        trigger: null, // Disparar imediatamente
+        content: { title, body, data: { type: 'overdue_nudge_summary' } },
+        trigger: null,
       });
-    }
+      await AsyncStorage.setItem(OVERDUE_NUDGE_KEY, dedupeKey);
+    });
   } catch (error) {
     appLog.error('Erro ao verificar manutenções atrasadas:', error);
   }

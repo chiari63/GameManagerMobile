@@ -1,17 +1,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ScrollView, View, StyleSheet } from 'react-native';
 import { Card, Text, Button, Chip, useTheme, ActivityIndicator } from 'react-native-paper';
-import { StackNavigationProp } from '@react-navigation/stack';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { appColors } from '../theme';
 import { Gamepad2, Wifi, WifiOff, RefreshCw } from 'lucide-react-native';
 import { getIGDBCredentials } from '../services/igdbAuth';
 import { checkIGDBConnection } from '../services/igdbApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSecureValue } from '../utils/securityUtils';
 import { STORAGE_KEYS } from '../constants/storage';
 
-type ApisConfigNavigationProp = StackNavigationProp<RootStackParamList, 'ApisConfig'>;
+type ApisConfigNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ApisConfig'>;
 
 const ApisConfigScreen: React.FC = () => {
   const navigation = useNavigation<ApisConfigNavigationProp>();
@@ -69,8 +69,8 @@ const ApisConfigScreen: React.FC = () => {
       try {
         setLoading(true);
         const creds = await getIGDBCredentials();
-        const token = await AsyncStorage.getItem(STORAGE_KEYS.IGDB_ACCESS_TOKEN);
-        const expiry = await AsyncStorage.getItem(STORAGE_KEYS.IGDB_TOKEN_EXPIRY);
+        const token = await getSecureValue(STORAGE_KEYS.IGDB_ACCESS_TOKEN);
+        const expiry = await getSecureValue(STORAGE_KEYS.IGDB_TOKEN_EXPIRY);
         setIgdbConfigured(!!creds.clientId && !!creds.clientSecret);
         setIgdbTokenValid(!!expiry && new Date(expiry).getTime() > Date.now() && !!token);
         

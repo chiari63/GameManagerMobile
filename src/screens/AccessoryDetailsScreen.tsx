@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Calendar, Gamepad, Gamepad2, Package, Wrench, ShoppingBag, BookOpen, MoreVertical, Edit, Trash2, AlertTriangle, Info, ArrowLeft } from 'lucide-react-native';
 import { getConsoles } from '../services/storage';
 import darkTheme, { appColors } from '../theme';
@@ -11,20 +12,24 @@ import { Menu } from 'react-native-paper';
 import { formatDate, formatCurrency } from '../utils/formatters';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { getAccessories } from '../services/storage';
+import type { Accessory } from '../types';
+import type { RootStackParamList } from '../navigation/types';
+import { ImagePreviewModal } from '../components/ImagePreviewModal';
 
 // Cor de destaque para acessórios (mesmo padrão da listagem)
 const ACCESSORY_ACCENT = '#f59e0b';
 
 const AccessoryDetailsScreen = () => {
-  const route = useRoute();
-  const navigation = useNavigation();
-  const { accessory } = route.params as { accessory: any };
+  const route = useRoute<RouteProp<RootStackParamList, 'AccessoryDetails'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { accessory } = route.params;
   const [localAccessory, setLocalAccessory] = useState(accessory);
   const theme = darkTheme;
   const { showValues } = useValuesVisibility();
   const { showAlert } = useAlert();
   const [consoleName, setConsoleName] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -65,7 +70,7 @@ const AccessoryDetailsScreen = () => {
 
   const handleEditAccessory = () => {
     setMenuVisible(false);
-    (navigation as any).navigate('Accessories', { editingAccessory: accessory });
+    navigation.navigate('Accessories', { editingAccessory: localAccessory });
   };
 
   const handleDeleteAccessory = () => {
@@ -99,13 +104,21 @@ const AccessoryDetailsScreen = () => {
         {/* Hero - mesmo layout da ConsoleDetailsScreen */}
         <View style={styles.heroContainer}>
           {localAccessory.imageUrl ? (
-            <Image source={{ uri: localAccessory.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            <TouchableOpacity
+              style={styles.heroImageFull}
+              accessibilityRole="button"
+              accessibilityLabel="Ampliar imagem do acessório"
+              activeOpacity={0.92}
+              onPress={() => setImagePreviewVisible(true)}
+            >
+              <Image source={{ uri: localAccessory.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            </TouchableOpacity>
           ) : (
             <View style={styles.placeholderHero}>
               <Package size={80} color={ACCESSORY_ACCENT} />
             </View>
           )}
-          <View style={styles.heroGradient} />
+          <View pointerEvents="none" style={styles.heroGradient} />
 
           <View style={styles.heroActions}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.heroActionButton}>
@@ -268,6 +281,12 @@ const AccessoryDetailsScreen = () => {
           ) : null}
         </View>
       </ScrollView>
+      <ImagePreviewModal
+        visible={imagePreviewVisible}
+        imageUri={localAccessory.imageUrl}
+        onDismiss={() => setImagePreviewVisible(false)}
+        accessibilityLabel={`Imagem ampliada do acessório ${localAccessory.name}`}
+      />
     </View>
   );
 };

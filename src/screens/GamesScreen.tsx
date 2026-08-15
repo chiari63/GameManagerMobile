@@ -4,7 +4,7 @@ import { Text, FAB, Searchbar, Button, TextInput, Portal, Modal, Menu, useTheme,
 import { checkIGDBConnection } from '../services/igdbApi';
 import { getGames, addGame, updateGame, deleteGame, getConsoles } from '../services/storage';
 import { Game, Console } from '../types';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Gamepad2, Plus, X, Image as ImageIcon, Edit, Trash2, ChevronDown, Upload, MoreVertical, SlidersHorizontal, ChevronLeft, Search, TrendingUp, Layout, ShoppingBag, WifiOff, Settings, Disc3 } from 'lucide-react-native';
 import { appColors } from '../theme';
 import { commonStyles } from '../theme/commonStyles';
@@ -13,12 +13,12 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { DatePicker } from '../components/DatePicker';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useAlert } from '../contexts/AlertContext';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import IGDBGameSearchModal from '../components/IGDBGameSearchModal';
 import { GamesStackParamList, MainTabParamList } from '../navigation/types';
-import type { RouteProp } from '@react-navigation/native';
 import { isValidDate, formatCurrency } from '../utils/formatters';
 
 // Lista de regiões disponíveis
@@ -27,10 +27,7 @@ const REGIOES = ['Americano', 'Japonês', 'Brasileiro'];
 // Lista de gêneros disponíveis
 const GENEROS = ['Ação', 'Aventura', 'RPG', 'Estratégia', 'Esporte', 'Corrida', 'Luta', 'Plataforma', 'Outros'];
 
-type GamesScreenProps = {
-  navigation: BottomTabNavigationProp<MainTabParamList>;
-  route: RouteProp<GamesStackParamList, 'GamesList'>;
-};
+type GamesScreenProps = NativeStackScreenProps<GamesStackParamList, 'GamesList'>;
 
 const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
   const theme = useTheme();
@@ -122,12 +119,12 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
       if (route.params?.autoOpenAdd) {
         setModalVisible(true);
         // Limpar o parâmetro para não abrir novamente ao voltar
-        navigation.setParams({ autoOpenAdd: undefined } as any);
+        navigation.setParams({ autoOpenAdd: undefined });
       }
       if (route.params?.editingGame) {
         handleEditGame(route.params.editingGame);
         // Limpar o parâmetro
-        navigation.setParams({ editingGame: undefined } as any);
+        navigation.setParams({ editingGame: undefined });
       }
     }, [route.params?.autoOpenAdd, route.params?.editingGame])
   );
@@ -636,7 +633,7 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.listContentContainer, filteredGames.length === 0 && { flex: 1 }]}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={renderHeader()}
         ListEmptyComponent={EmptyState}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
@@ -735,7 +732,7 @@ const GamesScreen = ({ navigation, route }: GamesScreenProps) => {
                         style={styles.igdbConfigLink}
                         onPress={() => {
                           setModalVisible(false);
-                          (navigation as any).navigate('HomeStack', { screen: 'ApiConfig' });
+                          navigation.getParent<BottomTabNavigationProp<MainTabParamList>>()?.navigate('HomeStack', { screen: 'ApiConfig' });
                         }}
                         activeOpacity={0.7}
                       >

@@ -17,6 +17,7 @@ import { ItemCard } from '../components/ItemCard';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { useAlert } from '../contexts/AlertContext';
 import { useAuth } from '../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,32 +27,8 @@ import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.7;
 
-type MainTabParamList = {
-  Home: undefined;
-  GamesStack: undefined;
-  ConsolesStack: undefined;
-  Wishlist: undefined;
-  GameDetails: { game: Game };
-  ConsoleDetails: { console: Console };
-  AccessoryDetails: { accessory: Accessory };
-};
-
-
-
-type RootStackParamList = {
-  MainTabs: undefined;
-  Maintenance: undefined;
-  Notifications: undefined;
-  ApisConfig: undefined;
-  ApiConfig: undefined;
-  Accessories: undefined;
-  GameDetails: { game: Game };
-  ConsoleDetails: { console: Console };
-  AccessoryDetails: { accessory: Accessory };
-};
-
 type HomeScreenNavigationProp = CompositeNavigationProp<
-  BottomTabNavigationProp<MainTabParamList, 'Home'>,
+  BottomTabNavigationProp<MainTabParamList, 'HomeStack'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
 
@@ -167,9 +144,6 @@ const HomeScreen = () => {
       // Verificar manutenções atrasadas (Nudge e Banner)
       const overdueItems = await getOverdueMaintenanceItems(consoles, accessories);
       setOverdueCount(overdueItems.length);
-      checkAndNotifyOverdue(consoles, accessories);
-
-      // Verificar manutenções atrasadas (Nudge)
       checkAndNotifyOverdue(consoles, accessories);
 
       // Adicionar log para verificar os acessórios e seus preços
@@ -659,13 +633,10 @@ const HomeScreen = () => {
                 }}
                 onPress={() => {
                   if (item.type === 'game') {
-                    // @ts-ignore - Navigation types might need strict check but this works for demo
                     navigation.navigate('GameDetails', { game: item.originalItem });
                   } else if (item.type === 'console') {
-                    // @ts-ignore
                     navigation.navigate('ConsoleDetails', { console: item.originalItem });
                   } else if (item.type === 'accessory') {
-                    // @ts-ignore
                     navigation.navigate('AccessoryDetails', { accessory: item.originalItem });
                   }
                 }}
@@ -777,7 +748,7 @@ const HomeScreen = () => {
                     {/* Consoles - Large Feature Card */}
                     <TouchableOpacity
                       style={styles.featuredCategoryCard}
-                      onPress={() => navigation.navigate('ConsolesStack')}
+                      onPress={() => navigation.navigate('ConsolesStack', undefined)}
                     >
                       <ImageBackground
                         source={require('../../assets/Consoles.jpg')}
@@ -800,7 +771,7 @@ const HomeScreen = () => {
                     <View style={styles.categoriesRow}>
                       <TouchableOpacity
                         style={styles.halfCategoryCard}
-                        onPress={() => navigation.navigate('GamesStack')}
+                        onPress={() => navigation.navigate('GamesStack', undefined)}
                       >
                         <ImageBackground
                           source={require('../../assets/Jogos.jpg')}
@@ -928,17 +899,17 @@ const HomeScreen = () => {
           {
             icon: ({ size, color }) => <Disc3 size={size} color={color} />,
             label: 'Novo Jogo',
-            onPress: () => navigation.navigate('GamesStack', { screen: 'GamesList', params: { autoOpenAdd: true } } as any),
+            onPress: () => navigation.navigate('MainTabs', { screen: 'GamesStack', params: { screen: 'GamesList', params: { autoOpenAdd: true } } }),
           },
           {
             icon: ({ size, color }) => <Gamepad size={size} color={color} />,
             label: 'Novo Console',
-            onPress: () => navigation.navigate('ConsolesStack', { screen: 'ConsolesNavigator', params: { autoOpenAdd: true } } as any),
+            onPress: () => navigation.navigate('MainTabs', { screen: 'ConsolesStack', params: { screen: 'ConsolesList', params: { autoOpenAdd: true } } }),
           },
           {
             icon: ({ size, color }) => <Package size={size} color={color} />,
             label: 'Novo Acessório',
-            onPress: () => navigation.navigate('Accessories', { autoOpenAdd: true } as any),
+            onPress: () => navigation.navigate('Accessories', { autoOpenAdd: true }),
           },
         ]}
         onStateChange={({ open }: { open: boolean }) => setFabOpen(open)}

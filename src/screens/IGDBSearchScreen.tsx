@@ -1,38 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { Text, Searchbar, Button, useTheme } from 'react-native-paper';
-import { RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Gamepad, ArrowLeft, Search, X } from 'lucide-react-native';
 import { commonStyles } from '../theme/commonStyles';
 import { appColors } from '../theme';
-import { searchGames, searchPlatforms, getGameDetails } from '../services/igdbApi';
+import { formatImageUrl, IGDBError, searchGames, searchPlatforms, getGameDetails } from '../services/igdbApi';
 
-// Definição do tipo para os parâmetros da rota
-type RootStackParamList = {
-  IGDBSearch: {
-    onSelect: (data: any) => void;
-    searchType: 'game' | 'platform';
-  };
-};
+import type { RootStackParamList } from '../navigation/types';
 
 type IGDBSearchScreenProps = {
-  navigation: StackNavigationProp<RootStackParamList, 'IGDBSearch'>;
+  navigation: NativeStackNavigationProp<RootStackParamList, 'IGDBSearch'>;
   route: RouteProp<RootStackParamList, 'IGDBSearch'>;
-};
-
-// Função para obter URL da imagem
-const getImageUrl = (imageId: string, size: string): string => {
-  const baseUrl = 'https://images.igdb.com/igdb/image/upload';
-  const sizeMap: Record<string, string> = {
-    cover_small: 't_cover_small',
-    cover_big: 't_cover_big',
-    logo_medium: 't_logo_med',
-    screenshot_big: 't_screenshot_big'
-  };
-  
-  const sizeParam = sizeMap[size] || 't_thumb';
-  return `${baseUrl}/${sizeParam}/${imageId}.jpg`;
 };
 
 const IGDBSearchScreen = ({ navigation, route }: IGDBSearchScreenProps) => {
@@ -76,7 +56,7 @@ const IGDBSearchScreen = ({ navigation, route }: IGDBSearchScreenProps) => {
       }
     } catch (err) {
       console.error('Erro na busca IGDB:', err);
-      setError('Erro ao buscar na API IGDB. Verifique sua conexão.');
+      setError(err instanceof IGDBError ? err.message : 'Erro ao buscar na API IGDB. Verifique sua conexão.');
     } finally {
       setLoading(false);
     }
@@ -95,7 +75,7 @@ const IGDBSearchScreen = ({ navigation, route }: IGDBSearchScreenProps) => {
           releaseYear: item.first_release_date 
             ? new Date(item.first_release_date * 1000).getFullYear().toString() 
             : '',
-          imageUrl: item.cover ? getImageUrl(item.cover.image_id, 'cover_big') : '',
+          imageUrl: item.cover ? formatImageUrl(item.cover.image_id, 'coverBig') : '',
           igdbId: item.id,
           igdbData: fullDetails || item, // Incluir dados completos do IGDB
         };
@@ -110,7 +90,7 @@ const IGDBSearchScreen = ({ navigation, route }: IGDBSearchScreenProps) => {
           releaseYear: item.first_release_date 
             ? new Date(item.first_release_date * 1000).getFullYear().toString() 
             : '',
-          imageUrl: item.cover ? getImageUrl(item.cover.image_id, 'cover_big') : '',
+          imageUrl: item.cover ? formatImageUrl(item.cover.image_id, 'coverBig') : '',
           igdbId: item.id,
           igdbData: item, // Usar dados básicos em caso de erro
         };
@@ -123,7 +103,7 @@ const IGDBSearchScreen = ({ navigation, route }: IGDBSearchScreenProps) => {
         name: item.name,
         brand: item.platform_family?.name || item.platform_logo?.name || '',
         imageUrl: item.platform_logo 
-          ? getImageUrl(item.platform_logo.image_id, 'logo_medium') 
+          ? formatImageUrl(item.platform_logo.image_id, 'logo')
           : '',
       };
       
@@ -135,9 +115,9 @@ const IGDBSearchScreen = ({ navigation, route }: IGDBSearchScreenProps) => {
 
   const renderItem = ({ item }: { item: any }) => {
     const imageUrl = searchType === 'game' && item.cover
-      ? getImageUrl(item.cover.image_id, 'cover_small')
+      ? formatImageUrl(item.cover.image_id, 'coverSmall')
       : searchType === 'platform' && item.platform_logo
-        ? getImageUrl(item.platform_logo.image_id, 'logo_medium')
+        ? formatImageUrl(item.platform_logo.image_id, 'logo')
         : null;
 
     return (

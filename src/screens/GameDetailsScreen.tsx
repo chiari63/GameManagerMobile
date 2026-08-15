@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, Linking, ActivityIndicator } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Divider, Menu, Portal, Modal, Button, TextInput } from 'react-native-paper';
 import {
   Calendar, Tag, Gamepad, Bookmark, Star, ArrowLeft, ExternalLink, Monitor,
@@ -13,16 +14,20 @@ import darkTheme, { appColors } from '../theme';
 import { useValuesVisibility } from '../contexts/ValuesVisibilityContext';
 import { commonStyles } from '../theme/commonStyles';
 import { formatDate, formatCurrency } from '../utils/formatters';
+import { isSafeExternalUrl } from '../utils/urlSecurity';
 import { translateText } from '../services/translate';
 import { Alert } from 'react-native';
 import { appEvents, APP_EVENTS } from '../services/events';
 import { getGames } from '../services/storage';
+import type { Game } from '../types';
+import type { RootStackParamList } from '../navigation/types';
+import { ImagePreviewModal } from '../components/ImagePreviewModal';
 
 
 const GameDetailsScreen = () => {
-  const route = useRoute();
-  const navigation = useNavigation();
-  const { game } = route.params as { game: any };
+  const route = useRoute<RouteProp<RootStackParamList, 'GameDetails'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { game } = route.params;
   const [localGame, setLocalGame] = useState(game);
   const { showValues } = useValuesVisibility();
   const theme = darkTheme;
@@ -37,6 +42,7 @@ const GameDetailsScreen = () => {
   const [translating, setTranslating] = useState(false);
   const [usingLocalData, setUsingLocalData] = useState(false);
   const [gameMenuVisible, setGameMenuVisible] = useState(false);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'media'>('info');
 
   const loadData = useCallback(async () => {
@@ -97,6 +103,11 @@ const GameDetailsScreen = () => {
   };
 
   const openWebsite = (url: string) => {
+    if (!isSafeExternalUrl(url)) {
+      Alert.alert('Link inválido', 'Este link não pode ser aberto com segurança.');
+      return;
+    }
+
     Linking.openURL(url).catch(err => console.error('Erro ao abrir URL:', err));
   };
 
@@ -130,8 +141,7 @@ const GameDetailsScreen = () => {
   };
 
   const handleEditGame = () => {
-    // @ts-ignore
-    navigation.navigate('GamesList', { editingGame: localGame });
+    navigation.navigate('MainTabs', { screen: 'GamesStack', params: { screen: 'GamesList', params: { editingGame: localGame } } });
   };
 
   const handleDeleteGame = () => {
@@ -162,13 +172,21 @@ const GameDetailsScreen = () => {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroContainer}>
           {localGame.imageUrl ? (
-            <Image source={{ uri: localGame.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            <TouchableOpacity
+              style={styles.heroImageFull}
+              accessibilityRole="button"
+              accessibilityLabel="Ampliar imagem do jogo"
+              activeOpacity={0.92}
+              onPress={() => setImagePreviewVisible(true)}
+            >
+              <Image source={{ uri: localGame.imageUrl }} style={styles.heroImageFull} resizeMode="cover" />
+            </TouchableOpacity>
           ) : (
             <View style={styles.placeholderHero}>
               <Disc3 size={80} color={appColors.primary} />
             </View>
           )}
-          <View style={styles.heroGradient} />
+          <View pointerEvents="none" style={styles.heroGradient} />
 
           {/* Floating Action Buttons over Hero */}
           <View style={styles.heroActions}>
@@ -455,6 +473,12 @@ const GameDetailsScreen = () => {
           ) : null}
         </View>
       </ScrollView>
+      <ImagePreviewModal
+        visible={imagePreviewVisible}
+        imageUri={localGame.imageUrl}
+        onDismiss={() => setImagePreviewVisible(false)}
+        accessibilityLabel={`Imagem ampliada do jogo ${localGame.name}`}
+      />
     </View>
   );
 };
